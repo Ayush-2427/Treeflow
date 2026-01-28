@@ -1,25 +1,32 @@
-export type NodeGroup = {
-  id: string;
-  name: string;
-};
+export type NodeType = "process" | "decision" | "start" | "end" | "note";
 
-export type TreeNodeData = {
+export interface TreeNodeData {
   title: string;
   description?: string;
-  completed?: boolean;
-  groupId?: string;
-};
+  notes?: string;
+  completed: boolean;
+  color?: string;
+  nodeType: NodeType; // Type of flowchart node
+}
 
-export type TreeMeta = {
+export type ConnectionType = "child" | "branch" | "dependency" | "prerequisite" | "reference";
+
+export interface ConnectionData {
+  type: ConnectionType;
+  label?: string; // Edge label for conditions
+}
+
+export interface TreeMeta {
   treeId: string;
   name: string;
   createdAt: number;
   updatedAt: number;
-};
+}
 
-export type ChatMessage = {
+export interface ChatMessage {
   id: string;
-  role: "user" | "assistant" | "system";
+  role: "user" | "assistant";
   content: string;
   createdAt: number;
-};
+  scope: string; // "workspace" or "node:nodeId"
+}
