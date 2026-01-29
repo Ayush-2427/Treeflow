@@ -14,9 +14,12 @@ import ReactFlow, {
   BaseEdge,
   EdgeLabelRenderer,
   SelectionMode,
+  type Viewport,
 } from "reactflow";
 
 import { useTreeStore } from "../../../../lib/tree/store";
+import { useAutoSave } from "../../../../lib/tree/hooks/useAutoSave";
+
 import ProcessNode from "./Processnode";
 import DecisionNode from "./Decisionnode";
 import { StartNode, EndNode } from "./Startendnodes";
@@ -115,6 +118,8 @@ interface CenterPanelProps {
 }
 
 export default function CenterPanel({ isFullscreen = false }: CenterPanelProps) {
+  const treeId = "default";
+
   const wrapperRef = useRef<HTMLDivElement>(null);
 
   // Track right drag to avoid opening Add Node menu after panning
@@ -154,6 +159,11 @@ export default function CenterPanel({ isFullscreen = false }: CenterPanelProps) 
 
   const nodes = useTreeStore((s) => s.nodes);
   const edges = useTreeStore((s) => s.edges);
+
+  const viewport = useTreeStore((s) => s.viewport);
+  const setViewport = useTreeStore((s) => s.setViewport);
+  const loadTree = useTreeStore((s) => s.loadTree);
+
   const selectNode = useTreeStore((s) => s.selectNode);
   const addNodeAtPosition = useTreeStore((s) => s.addNodeAtPosition);
 
@@ -169,6 +179,22 @@ export default function CenterPanel({ isFullscreen = false }: CenterPanelProps) 
   const deleteNode = useTreeStore((s) => s.deleteNode);
 
   const { screenToFlowPosition, getNodes } = useReactFlow();
+
+  // Load persisted tree on mount
+  useEffect(() => {
+    loadTree(treeId);
+  }, [loadTree, treeId]);
+
+  // Auto-save whenever nodes/edges/viewport changes
+  useAutoSave(treeId, 600);
+
+  // Persist viewport after user finishes moving/zooming
+  const handleMoveEnd = useCallback(
+    (_: any, vp: Viewport) => {
+      setViewport(vp);
+    },
+    [setViewport]
+  );
 
   const nodeTypes: NodeTypes = useMemo(
     () => ({
@@ -189,9 +215,17 @@ export default function CenterPanel({ isFullscreen = false }: CenterPanelProps) 
   );
 
   const closeAllMenus = useCallback(() => {
-    setContextMenu({ isOpen: false, position: { x: 0, y: 0 }, flowPosition: { x: 0, y: 0 } });
+    setContextMenu({
+      isOpen: false,
+      position: { x: 0, y: 0 },
+      flowPosition: { x: 0, y: 0 },
+    });
     setEdgeMenu({ isOpen: false, edgeId: null, position: { x: 0, y: 0 } });
-    setCompactInspector({ isOpen: false, nodeId: null, position: { x: 0, y: 0 } });
+    setCompactInspector({
+      isOpen: false,
+      nodeId: null,
+      position: { x: 0, y: 0 },
+    });
   }, []);
 
   // Keyboard delete (with focus guard)
@@ -245,11 +279,22 @@ export default function CenterPanel({ isFullscreen = false }: CenterPanelProps) 
       if (menuX < 10) menuX = 10;
       if (menuY < 10) menuY = 10;
 
-      const flowPos = screenToFlowPosition({ x: event.clientX, y: event.clientY });
+      const flowPos = screenToFlowPosition({
+        x: event.clientX,
+        y: event.clientY,
+      });
 
       setEdgeMenu({ isOpen: false, edgeId: null, position: { x: 0, y: 0 } });
-      setCompactInspector({ isOpen: false, nodeId: null, position: { x: 0, y: 0 } });
-      setContextMenu({ isOpen: true, position: { x: menuX, y: menuY }, flowPosition: flowPos });
+      setCompactInspector({
+        isOpen: false,
+        nodeId: null,
+        position: { x: 0, y: 0 },
+      });
+      setContextMenu({
+        isOpen: true,
+        position: { x: menuX, y: menuY },
+        flowPosition: flowPos,
+      });
     },
     [screenToFlowPosition]
   );
@@ -257,9 +302,17 @@ export default function CenterPanel({ isFullscreen = false }: CenterPanelProps) 
   const handleAddNode = useCallback(
     (nodeType: NodeType) => {
       if (contextMenu.isOpen) {
-        addNodeAtPosition(contextMenu.flowPosition.x, contextMenu.flowPosition.y, nodeType);
+        addNodeAtPosition(
+          contextMenu.flowPosition.x,
+          contextMenu.flowPosition.y,
+          nodeType
+        );
       }
-      setContextMenu({ isOpen: false, position: { x: 0, y: 0 }, flowPosition: { x: 0, y: 0 } });
+      setContextMenu({
+        isOpen: false,
+        position: { x: 0, y: 0 },
+        flowPosition: { x: 0, y: 0 },
+      });
     },
     [contextMenu, addNodeAtPosition]
   );
@@ -304,9 +357,21 @@ export default function CenterPanel({ isFullscreen = false }: CenterPanelProps) 
       if (menuX < 10) menuX = 10;
       if (menuY < 10) menuY = 10;
 
-      setContextMenu({ isOpen: false, position: { x: 0, y: 0 }, flowPosition: { x: 0, y: 0 } });
-      setCompactInspector({ isOpen: false, nodeId: null, position: { x: 0, y: 0 } });
-      setEdgeMenu({ isOpen: true, edgeId: edge.id, position: { x: menuX, y: menuY } });
+      setContextMenu({
+        isOpen: false,
+        position: { x: 0, y: 0 },
+        flowPosition: { x: 0, y: 0 },
+      });
+      setCompactInspector({
+        isOpen: false,
+        nodeId: null,
+        position: { x: 0, y: 0 },
+      });
+      setEdgeMenu({
+        isOpen: true,
+        edgeId: edge.id,
+        position: { x: menuX, y: menuY },
+      });
     },
     []
   );
@@ -319,7 +384,11 @@ export default function CenterPanel({ isFullscreen = false }: CenterPanelProps) 
       selectNode(node.id);
 
       // Clicking a node closes Add Node menu, keeps node inspector
-      setContextMenu({ isOpen: false, position: { x: 0, y: 0 }, flowPosition: { x: 0, y: 0 } });
+      setContextMenu({
+        isOpen: false,
+        position: { x: 0, y: 0 },
+        flowPosition: { x: 0, y: 0 },
+      });
       setEdgeMenu({ isOpen: false, edgeId: null, position: { x: 0, y: 0 } });
 
       // Show compact inspector (fullscreen or small screens)
@@ -333,8 +402,10 @@ export default function CenterPanel({ isFullscreen = false }: CenterPanelProps) 
         const inspectorWidth = 280;
         const inspectorHeight = 300;
 
-        if (inspectorX + inspectorWidth > rect.width) inspectorX = rect.width - inspectorWidth - 10;
-        if (inspectorY + inspectorHeight > rect.height) inspectorY = rect.height - inspectorHeight - 10;
+        if (inspectorX + inspectorWidth > rect.width)
+          inspectorX = rect.width - inspectorWidth - 10;
+        if (inspectorY + inspectorHeight > rect.height)
+          inspectorY = rect.height - inspectorHeight - 10;
         if (inspectorX < 10) inspectorX = 10;
         if (inspectorY < 10) inspectorY = 10;
 
@@ -425,7 +496,6 @@ export default function CenterPanel({ isFullscreen = false }: CenterPanelProps) 
           rightDraggedRef.current = false;
         }}
         onContextMenu={(e) => {
-          // prevent browser menu inside canvas
           e.preventDefault();
         }}
       >
@@ -445,26 +515,20 @@ export default function CenterPanel({ isFullscreen = false }: CenterPanelProps) 
           nodesDraggable
           nodesConnectable
           elementsSelectable
-
-          // Selection is now default left drag on empty space
           selectionOnDrag={true}
           selectNodesOnDrag={true}
           selectionMode={SelectionMode.Partial}
-
-          // Panning only on right drag
           panOnDrag={[2]}
-
-          // Zoom range
           minZoom={0.02}
           maxZoom={2}
-          defaultViewport={{ x: 0, y: 0, zoom: 1 }}
+          defaultViewport={viewport}
+          onMoveEnd={handleMoveEnd}
         >
           <Background />
           <Controls />
           <MiniMap />
         </ReactFlow>
 
-        {/* Canvas Context Menu (Add Node) */}
         {contextMenu.isOpen && (
           <div
             className="absolute z-50 min-w-[180px] rounded-xl border border-slate-200 bg-white py-2 shadow-xl"
@@ -522,7 +586,6 @@ export default function CenterPanel({ isFullscreen = false }: CenterPanelProps) 
           </div>
         )}
 
-        {/* Edge Context Menu */}
         {edgeMenu.isOpen && edgeMenu.edgeId && (
           <div
             className="absolute z-50 min-w-[200px] rounded-xl border border-slate-200 bg-white py-2 shadow-xl"
@@ -537,7 +600,9 @@ export default function CenterPanel({ isFullscreen = false }: CenterPanelProps) 
               onClick={() => {
                 const current = edges.find((e) => e.id === edgeMenu.edgeId);
                 const currentLabel =
-                  (current?.data as any)?.label ?? (current?.label as string) ?? "";
+                  (current?.data as any)?.label ??
+                  (current?.label as string) ??
+                  "";
                 const next = window.prompt("Edit label:", currentLabel);
                 if (next !== null) updateEdgeLabel(edgeMenu.edgeId!, next);
                 setEdgeMenu({ isOpen: false, edgeId: null, position: { x: 0, y: 0 } });
@@ -564,12 +629,15 @@ export default function CenterPanel({ isFullscreen = false }: CenterPanelProps) 
           </div>
         )}
 
-        {/* Compact Node Inspector */}
         {compactInspector.isOpen && inspectorNode && (
           <NodeInspector
             node={inspectorNode}
             onClose={() =>
-              setCompactInspector({ isOpen: false, nodeId: null, position: { x: 0, y: 0 } })
+              setCompactInspector({
+                isOpen: false,
+                nodeId: null,
+                position: { x: 0, y: 0 },
+              })
             }
             position={compactInspector.position}
           />

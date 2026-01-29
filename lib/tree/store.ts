@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { applyNodeChanges, applyEdgeChanges } from "reactflow";
-import type { Edge, Node, NodeChange, EdgeChange } from "reactflow";
+import type { Edge, Node, NodeChange, EdgeChange, Viewport } from "reactflow";
 import type {
   ChatMessage,
   TreeMeta,
@@ -9,6 +9,14 @@ import type {
   NodeType,
 } from "./types";
 import { nanoid } from "nanoid";
+import {
+  localStorageAdapter,
+  type TreeflowPersistedState,
+  SCHEMA_VERSION,
+  validatePersistedState,
+  downloadJSON,
+  readJSONFile,
+} from "./persistance";
 
 type ChatScope = { type: "workspace" } | { type: "node"; nodeId: string };
 
@@ -17,6 +25,7 @@ type TreeState = {
 
   nodes: Node<TreeNodeData>[];
   edges: Edge[];
+  viewport: Viewport;
 
   selectedNodeId: string | null;
 
@@ -71,6 +80,16 @@ type TreeState = {
   resetDailyIfNeeded: () => void;
 
   layoutChildren: (parentId: string) => void;
+
+  // Persistence methods
+  setViewport: (viewport: Viewport) => void;
+  getPersistableState: () => TreeflowPersistedState;
+  hydrateFromPersisted: (state: TreeflowPersistedState) => void;
+  loadTree: (treeId: string) => Promise<boolean>;
+  saveTree: (treeId: string) => Promise<void>;
+  resetTree: (treeId: string) => Promise<void>;
+  exportTree: (treeId: string) => void;
+  importTree: (treeId: string, file: File) => Promise<void>;
 };
 
 function getDayKey() {
@@ -113,15 +132,15 @@ function collectSubtreeIds(rootId: string, edges: Edge[]) {
 function getConnectionColor(type: ConnectionType): string {
   switch (type) {
     case "child":
-      return "#64748b"; // slate
+      return "#64748b";
     case "branch":
-      return "#3b82f6"; // blue
+      return "#3b82f6";
     case "dependency":
-      return "#f59e0b"; // amber
+      return "#f59e0b";
     case "prerequisite":
-      return "#ef4444"; // red
+      return "#ef4444";
     case "reference":
-      return "#8b5cf6"; // purple
+      return "#8b5cf6";
     default:
       return "#64748b";
   }
@@ -129,7 +148,7 @@ function getConnectionColor(type: ConnectionType): string {
 
 export const useTreeStore = create<TreeState>((set, get) => ({
   meta: {
-    treeId: "local-tree",
+    treeId: "default",
     name: "My Tree",
     createdAt: Date.now(),
     updatedAt: Date.now(),
@@ -151,6 +170,7 @@ export const useTreeStore = create<TreeState>((set, get) => ({
     },
   ],
   edges: [],
+  viewport: { x: 0, y: 0, zoom: 1 },
 
   selectedNodeId: "root",
 
@@ -601,4 +621,129 @@ export const useTreeStore = create<TreeState>((set, get) => ({
         meta: { ...get().meta, updatedAt: Date.now() },
       };
     }),
+
+  // ============================================================================
+  // PERSISTENCE METHODS
+  // ============================================================================
+
+  setViewport: (viewport) => set({ viewport }),
+
+  getPersistableState: () => {
+    const state = get();
+    return {
+      schemaVersion: SCHEMA_VERSION,
+      treeId: state.meta.treeId,
+      updatedAt: new Date().toISOString(),
+      nodes: state.nodes,
+      edges: state.edges,
+      viewport: state.viewport,
+      ui: {
+        selectedNodeId: state.selectedNodeId,
+      },
+    };
+  },
+
+  hydrateFromPersisted: (persisted) => {
+    set({
+      nodes: persisted.nodes,
+      edges: persisted.edges,
+      viewport: persisted.viewport,
+      selectedNodeId: persisted.ui?.selectedNodeId || null,
+      meta: {
+        ...get().meta,
+        treeId: persisted.treeId,
+        updatedAt: new Date(persisted.updatedAt).getTime(),
+      },
+    });
+  },
+
+  loadTree: async (treeId: string) => {
+    try {
+      const persisted = await localStorageAdapter.load(treeId);
+
+      if (persisted) {
+        get().hydrateFromPersisted(persisted);
+        console.log(`✓ Loaded tree "${treeId}" from localStorage`);
+        return true;
+      } else {
+        console.log(`No saved state for tree "${treeId}", using defaults`);
+        return false;
+      }
+    } catch (error) {
+      console.error("Failed to load tree:", error);
+      return false;
+    }
+  },
+
+  saveTree: async (treeId: string) => {
+    try {
+      const state = get().getPersistableState();
+      await localStorageAdapter.save(treeId, state);
+    } catch (error) {
+      console.error("Failed to save tree:", error);
+      throw error;
+    }
+  },
+
+  resetTree: async (treeId: string) => {
+    try {
+      await localStorageAdapter.clear(treeId);
+
+      set({
+        nodes: [
+          {
+            id: "root",
+            type: "process",
+            position: { x: 0, y: 0 },
+            data: {
+              title: "Start here",
+              description: "Your main goal goes here",
+              notes: "",
+              completed: false,
+              color: "slate",
+              nodeType: "process",
+            },
+          },
+        ],
+        edges: [],
+        viewport: { x: 0, y: 0, zoom: 1 },
+        selectedNodeId: "root",
+        meta: {
+          ...get().meta,
+          treeId,
+          updatedAt: Date.now(),
+        },
+      });
+
+      console.log(`✓ Reset tree "${treeId}" to defaults`);
+    } catch (error) {
+      console.error("Failed to reset tree:", error);
+      throw error;
+    }
+  },
+
+  exportTree: (treeId: string) => {
+    const state = get().getPersistableState();
+    const filename = `treeflow-${treeId}-${Date.now()}.json`;
+    downloadJSON(filename, state);
+    console.log(`✓ Exported tree "${treeId}" as ${filename}`);
+  },
+
+  importTree: async (treeId: string, file: File) => {
+    try {
+      const data = await readJSONFile(file);
+
+      if (!validatePersistedState(data)) {
+        throw new Error("Invalid TreeFlow data format");
+      }
+
+      get().hydrateFromPersisted(data);
+      await localStorageAdapter.save(treeId, data);
+
+      console.log(`✓ Imported tree from ${file.name}`);
+    } catch (error) {
+      console.error("Failed to import tree:", error);
+      throw error;
+    }
+  },
 }));
