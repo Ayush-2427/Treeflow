@@ -13,19 +13,21 @@ import ReactFlow, {
   getBezierPath,
   BaseEdge,
   EdgeLabelRenderer,
+  SelectionMode,
 } from "reactflow";
 
 import { useTreeStore } from "../../../../lib/tree/store";
-import ProcessNode from "../CenterPanel/Processnode";
-import DecisionNode from "../CenterPanel/Decisionnode";
-import { StartNode, EndNode } from "../CenterPanel/Startendnodes";
-import NoteNode from "../CenterPanel/Notenode";
+import ProcessNode from "./Processnode";
+import DecisionNode from "./Decisionnode";
+import { StartNode, EndNode } from "./Startendnodes";
+import NoteNode from "./Notenode";
 import ConnectionTypeModal from "./ConnectionTypeModal";
+import NodeInspector from "./Nodeinspector";
 import type { ConnectionType, NodeType } from "../../../../lib/tree/types";
 
 import "reactflow/dist/style.css";
 
-// Custom Edge with editable label (NO onContextMenu on BaseEdge, React Flow does not support it)
+// Custom Edge with editable label
 function CustomEdge({
   id,
   sourceX,
@@ -54,7 +56,6 @@ function CustomEdge({
   const updateEdgeLabel = useTreeStore((s) => s.updateEdgeLabel);
 
   useEffect(() => {
-    // keep local state in sync if store updates label externally
     setEditLabel((data?.label as string) || (label as string) || "");
   }, [data?.label, label]);
 
@@ -109,8 +110,17 @@ function CustomEdge({
   );
 }
 
-export default function CenterPanel() {
+interface CenterPanelProps {
+  isFullscreen?: boolean;
+}
+
+export default function CenterPanel({ isFullscreen = false }: CenterPanelProps) {
   const wrapperRef = useRef<HTMLDivElement>(null);
+
+  // Track right drag to avoid opening Add Node menu after panning
+  const rightMouseDownRef = useRef(false);
+  const rightDraggedRef = useRef(false);
+  const rightStartRef = useRef<{ x: number; y: number } | null>(null);
 
   const [contextMenu, setContextMenu] = useState<{
     isOpen: boolean;
@@ -122,7 +132,6 @@ export default function CenterPanel() {
     flowPosition: { x: 0, y: 0 },
   });
 
-  // Edge context menu (right click edge) - handled via ReactFlow onEdgeContextMenu
   const [edgeMenu, setEdgeMenu] = useState<{
     isOpen: boolean;
     edgeId: string | null;
@@ -130,6 +139,16 @@ export default function CenterPanel() {
   }>({
     isOpen: false,
     edgeId: null,
+    position: { x: 0, y: 0 },
+  });
+
+  const [compactInspector, setCompactInspector] = useState<{
+    isOpen: boolean;
+    nodeId: string | null;
+    position: { x: number; y: number };
+  }>({
+    isOpen: false,
+    nodeId: null,
     position: { x: 0, y: 0 },
   });
 
@@ -147,8 +166,9 @@ export default function CenterPanel() {
 
   const updateEdgeLabel = useTreeStore((s) => s.updateEdgeLabel);
   const deleteEdge = useTreeStore((s) => s.deleteEdge);
+  const deleteNode = useTreeStore((s) => s.deleteNode);
 
-  const { screenToFlowPosition } = useReactFlow();
+  const { screenToFlowPosition, getNodes } = useReactFlow();
 
   const nodeTypes: NodeTypes = useMemo(
     () => ({
@@ -171,22 +191,52 @@ export default function CenterPanel() {
   const closeAllMenus = useCallback(() => {
     setContextMenu({ isOpen: false, position: { x: 0, y: 0 }, flowPosition: { x: 0, y: 0 } });
     setEdgeMenu({ isOpen: false, edgeId: null, position: { x: 0, y: 0 } });
+    setCompactInspector({ isOpen: false, nodeId: null, position: { x: 0, y: 0 } });
   }, []);
+
+  // Keyboard delete (with focus guard)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      if (
+        target.tagName === "INPUT" ||
+        target.tagName === "TEXTAREA" ||
+        target.isContentEditable
+      ) {
+        return;
+      }
+
+      if (e.key === "Delete" || e.key === "Backspace") {
+        e.preventDefault();
+        const selectedNodes = getNodes().filter((n) => n.selected);
+        selectedNodes.forEach((n) => {
+          if (n.id !== "root") deleteNode(n.id);
+        });
+      }
+
+      if (e.key === "Escape") {
+        closeAllMenus();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [getNodes, deleteNode, closeAllMenus]);
 
   const handlePaneContextMenu = useCallback(
     (event: React.MouseEvent) => {
       event.preventDefault();
       event.stopPropagation();
 
-      if (!wrapperRef.current) return;
+      // If user panned with right drag, do not open menu on release
+      if (rightDraggedRef.current) return;
 
+      if (!wrapperRef.current) return;
       const rect = wrapperRef.current.getBoundingClientRect();
 
-      // Menu position relative to wrapper (DOM coords)
       let menuX = event.clientX - rect.left;
       let menuY = event.clientY - rect.top;
 
-      // Clamp menu within canvas boundaries
       const menuWidth = 200;
       const menuHeight = 260;
 
@@ -195,10 +245,10 @@ export default function CenterPanel() {
       if (menuX < 10) menuX = 10;
       if (menuY < 10) menuY = 10;
 
-      // Flow position for node placement (flow coords)
       const flowPos = screenToFlowPosition({ x: event.clientX, y: event.clientY });
 
       setEdgeMenu({ isOpen: false, edgeId: null, position: { x: 0, y: 0 } });
+      setCompactInspector({ isOpen: false, nodeId: null, position: { x: 0, y: 0 } });
       setContextMenu({ isOpen: true, position: { x: menuX, y: menuY }, flowPosition: flowPos });
     },
     [screenToFlowPosition]
@@ -235,7 +285,6 @@ export default function CenterPanel() {
     setPendingConnection(null);
   }, [setPendingConnection]);
 
-  // Edge right click - MUST be on ReactFlow (not BaseEdge)
   const handleEdgeContextMenu = useCallback(
     (event: React.MouseEvent, edge: any) => {
       event.preventDefault();
@@ -256,22 +305,60 @@ export default function CenterPanel() {
       if (menuY < 10) menuY = 10;
 
       setContextMenu({ isOpen: false, position: { x: 0, y: 0 }, flowPosition: { x: 0, y: 0 } });
+      setCompactInspector({ isOpen: false, nodeId: null, position: { x: 0, y: 0 } });
       setEdgeMenu({ isOpen: true, edgeId: edge.id, position: { x: menuX, y: menuY } });
     },
     []
   );
 
-  // Close on Escape
-  useEffect(() => {
-    const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === "Escape") closeAllMenus();
-    };
-    window.addEventListener("keydown", handleEscape);
-    return () => window.removeEventListener("keydown", handleEscape);
-  }, [closeAllMenus]);
+  const handleNodeClick = useCallback(
+    (event: React.MouseEvent, node: any) => {
+      // only react to left click
+      if (event.button !== 0) return;
 
-  // Get source node type for modal
+      selectNode(node.id);
+
+      // Clicking a node closes Add Node menu, keeps node inspector
+      setContextMenu({ isOpen: false, position: { x: 0, y: 0 }, flowPosition: { x: 0, y: 0 } });
+      setEdgeMenu({ isOpen: false, edgeId: null, position: { x: 0, y: 0 } });
+
+      // Show compact inspector (fullscreen or small screens)
+      if (isFullscreen || window.innerWidth < 1024) {
+        if (!wrapperRef.current) return;
+        const rect = wrapperRef.current.getBoundingClientRect();
+
+        let inspectorX = event.clientX - rect.left + 20;
+        let inspectorY = event.clientY - rect.top;
+
+        const inspectorWidth = 280;
+        const inspectorHeight = 300;
+
+        if (inspectorX + inspectorWidth > rect.width) inspectorX = rect.width - inspectorWidth - 10;
+        if (inspectorY + inspectorHeight > rect.height) inspectorY = rect.height - inspectorHeight - 10;
+        if (inspectorX < 10) inspectorX = 10;
+        if (inspectorY < 10) inspectorY = 10;
+
+        setCompactInspector({
+          isOpen: true,
+          nodeId: node.id,
+          position: { x: inspectorX, y: inspectorY },
+        });
+      }
+    },
+    [selectNode, isFullscreen]
+  );
+
+  const handlePaneClick = useCallback(() => {
+    selectNode(null);
+    closeAllMenus();
+  }, [selectNode, closeAllMenus]);
+
+  const handleFullscreen = useCallback(() => {
+    window.open("/workspace/fullscreen", "_blank", "noopener,noreferrer");
+  }, []);
+
   const sourceNode = nodes.find((n) => n.id === pendingConnection?.source);
+  const inspectorNode = nodes.find((n) => n.id === compactInspector.nodeId);
 
   return (
     <div className="flex h-full flex-col">
@@ -279,32 +366,74 @@ export default function CenterPanel() {
         <div>
           <h2 className="text-sm font-semibold">TreeFlow Canvas</h2>
           <p className="mt-1 text-xs text-slate-500">
-            Drag nodes - Connect with handles - Right-click canvas to add - Double-click labels to edit
+            Left drag on empty space selects • Right drag pans • Right click adds node
           </p>
         </div>
 
         <div className="flex items-center gap-2">
-          <button className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-medium hover:bg-slate-50">
+          {!isFullscreen && (
+            <button
+              onClick={handleFullscreen}
+              className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-medium hover:bg-slate-50 transition-all"
+              type="button"
+            >
+              ⛶ Fullscreen
+            </button>
+          )}
+          <button
+            className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-medium hover:bg-slate-50"
+            type="button"
+          >
             Auto Layout
           </button>
-          <button className="rounded-xl bg-slate-900 px-3 py-2 text-xs font-medium text-white hover:bg-slate-800">
+          <button
+            className="rounded-xl bg-slate-900 px-3 py-2 text-xs font-medium text-white hover:bg-slate-800"
+            type="button"
+          >
             Export
           </button>
         </div>
       </div>
 
-      <div ref={wrapperRef} className="relative flex-1 rounded-xl border border-slate-200 bg-white">
+      <div
+        ref={wrapperRef}
+        className="relative flex-1 rounded-xl border border-slate-200 bg-white"
+        onMouseDown={(e) => {
+          if (e.button !== 2) return;
+          rightMouseDownRef.current = true;
+          rightDraggedRef.current = false;
+          rightStartRef.current = { x: e.clientX, y: e.clientY };
+        }}
+        onMouseMove={(e) => {
+          if (!rightMouseDownRef.current || !rightStartRef.current) return;
+          const dx = Math.abs(e.clientX - rightStartRef.current.x);
+          const dy = Math.abs(e.clientY - rightStartRef.current.y);
+          if (dx + dy > 6) rightDraggedRef.current = true;
+        }}
+        onMouseUp={(e) => {
+          if (e.button !== 2) return;
+          rightMouseDownRef.current = false;
+          rightStartRef.current = null;
+
+          window.setTimeout(() => {
+            rightDraggedRef.current = false;
+          }, 0);
+        }}
+        onMouseLeave={() => {
+          rightMouseDownRef.current = false;
+          rightStartRef.current = null;
+          rightDraggedRef.current = false;
+        }}
+        onContextMenu={(e) => {
+          // prevent browser menu inside canvas
+          e.preventDefault();
+        }}
+      >
         <ReactFlow
           nodes={nodes}
           edges={edges}
-          onNodeClick={(_, node) => {
-            selectNode(node.id);
-            setEdgeMenu({ isOpen: false, edgeId: null, position: { x: 0, y: 0 } });
-          }}
-          onPaneClick={() => {
-            selectNode(null);
-            closeAllMenus();
-          }}
+          onNodeClick={handleNodeClick}
+          onPaneClick={handlePaneClick}
           onPaneContextMenu={handlePaneContextMenu}
           onConnect={onConnect}
           onNodesChange={onNodesChange}
@@ -316,13 +445,26 @@ export default function CenterPanel() {
           nodesDraggable
           nodesConnectable
           elementsSelectable
+
+          // Selection is now default left drag on empty space
+          selectionOnDrag={true}
+          selectNodesOnDrag={true}
+          selectionMode={SelectionMode.Partial}
+
+          // Panning only on right drag
+          panOnDrag={[2]}
+
+          // Zoom range
+          minZoom={0.02}
+          maxZoom={2}
+          defaultViewport={{ x: 0, y: 0, zoom: 1 }}
         >
           <Background />
           <Controls />
           <MiniMap />
         </ReactFlow>
 
-        {/* Canvas Context Menu */}
+        {/* Canvas Context Menu (Add Node) */}
         {contextMenu.isOpen && (
           <div
             className="absolute z-50 min-w-[180px] rounded-xl border border-slate-200 bg-white py-2 shadow-xl"
@@ -336,6 +478,7 @@ export default function CenterPanel() {
             <button
               onClick={() => handleAddNode("process")}
               className="flex w-full items-center gap-3 px-4 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
+              type="button"
             >
               <span className="text-lg">▭</span>
               <span>Process</span>
@@ -344,6 +487,7 @@ export default function CenterPanel() {
             <button
               onClick={() => handleAddNode("decision")}
               className="flex w-full items-center gap-3 px-4 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
+              type="button"
             >
               <span className="text-lg">◆</span>
               <span>Decision</span>
@@ -352,6 +496,7 @@ export default function CenterPanel() {
             <button
               onClick={() => handleAddNode("start")}
               className="flex w-full items-center gap-3 px-4 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
+              type="button"
             >
               <span className="text-lg">🚀</span>
               <span>Start</span>
@@ -360,6 +505,7 @@ export default function CenterPanel() {
             <button
               onClick={() => handleAddNode("end")}
               className="flex w-full items-center gap-3 px-4 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
+              type="button"
             >
               <span className="text-lg">🏁</span>
               <span>End</span>
@@ -368,6 +514,7 @@ export default function CenterPanel() {
             <button
               onClick={() => handleAddNode("note")}
               className="flex w-full items-center gap-3 px-4 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
+              type="button"
             >
               <span className="text-lg">📝</span>
               <span>Note</span>
@@ -396,6 +543,7 @@ export default function CenterPanel() {
                 setEdgeMenu({ isOpen: false, edgeId: null, position: { x: 0, y: 0 } });
               }}
               className="flex w-full items-center gap-3 px-4 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
+              type="button"
             >
               <span className="text-lg">✏️</span>
               <span>Edit label</span>
@@ -408,27 +556,40 @@ export default function CenterPanel() {
                 setEdgeMenu({ isOpen: false, edgeId: null, position: { x: 0, y: 0 } });
               }}
               className="flex w-full items-center gap-3 px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50"
+              type="button"
             >
               <span className="text-lg">🗑️</span>
               <span>Delete</span>
             </button>
           </div>
         )}
+
+        {/* Compact Node Inspector */}
+        {compactInspector.isOpen && inspectorNode && (
+          <NodeInspector
+            node={inspectorNode}
+            onClose={() =>
+              setCompactInspector({ isOpen: false, nodeId: null, position: { x: 0, y: 0 } })
+            }
+            position={compactInspector.position}
+          />
+        )}
       </div>
 
       <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
         <div className="grid grid-cols-2 gap-4 text-xs text-slate-600">
           <div className="space-y-1">
-            <p className="font-semibold text-slate-700">Canvas Controls:</p>
-            <p>• Drag nodes to reposition</p>
-            <p>• Drag from handles to connect</p>
-            <p>• Right-click canvas to add nodes</p>
+            <p className="font-semibold text-slate-700">Canvas:</p>
+            <p>• Left drag empty space selects</p>
+            <p>• Right drag pans</p>
+            <p>• Right click empty space opens Add Node</p>
+            <p>• Delete/Backspace removes selected nodes</p>
           </div>
           <div className="space-y-1">
-            <p className="font-semibold text-slate-700">Edge Controls:</p>
+            <p className="font-semibold text-slate-700">Edges:</p>
             <p>• Double-click label to edit</p>
             <p>• Right-click edge for options</p>
-            <p>• Labels show conditions/flow</p>
+            <p>• Drag handles to connect</p>
           </div>
         </div>
       </div>

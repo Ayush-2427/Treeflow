@@ -161,31 +161,34 @@ export default function LeftPanel() {
           />
         </div>
 
-        {/* Node Color */}
+        {/* Node Color - Compact Radio Chips */}
         <div>
           <label className="block text-xs font-medium text-slate-700 mb-1.5">
             Color Theme
           </label>
-          <div className="grid grid-cols-4 gap-2">
+          <div className="flex gap-1.5 flex-wrap">
             {[
-              { name: "slate", color: "bg-slate-500", border: "border-slate-500" },
-              { name: "blue", color: "bg-blue-500", border: "border-blue-500" },
-              { name: "green", color: "bg-green-500", border: "border-green-500" },
-              { name: "purple", color: "bg-purple-500", border: "border-purple-500" },
-              { name: "orange", color: "bg-orange-500", border: "border-orange-500" },
-              { name: "red", color: "bg-red-500", border: "border-red-500" },
-              { name: "pink", color: "bg-pink-500", border: "border-pink-500" },
-              { name: "yellow", color: "bg-yellow-500", border: "border-yellow-500" },
+              { name: "slate", color: "bg-slate-500" },
+              { name: "blue", color: "bg-blue-500" },
+              { name: "green", color: "bg-green-500" },
+              { name: "purple", color: "bg-purple-500" },
+              { name: "orange", color: "bg-orange-500" },
+              { name: "red", color: "bg-red-500" },
+              { name: "pink", color: "bg-pink-500" },
+              { name: "yellow", color: "bg-yellow-500" },
             ].map((colorOption) => (
               <button
                 key={colorOption.name}
                 onClick={() => updateNodeData(selectedNode.id, { color: colorOption.name })}
-                className={`h-10 rounded-lg ${colorOption.color} transition-all ${
+                className={`w-7 h-7 rounded-md ${colorOption.color} transition-all ${
                   (selectedNode.data.color || "slate") === colorOption.name
-                    ? `ring-2 ring-offset-2 ${colorOption.border}`
-                    : "opacity-70 hover:opacity-100"
+                    ? "ring-2 ring-offset-2 ring-slate-900"
+                    : "opacity-60 hover:opacity-100 hover:scale-105"
                 }`}
                 title={colorOption.name}
+                aria-label={`Select ${colorOption.name} color`}
+                role="radio"
+                aria-checked={(selectedNode.data.color || "slate") === colorOption.name}
               />
             ))}
           </div>
