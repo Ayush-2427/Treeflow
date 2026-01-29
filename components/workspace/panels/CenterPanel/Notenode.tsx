@@ -1,63 +1,40 @@
 import { memo } from "react";
 import { Handle, Position, NodeProps } from "reactflow";
 import type { TreeNodeData } from "../../../../lib/tree/types";
+import { getNodeColorStyle } from "../../../../lib/tree/color";
+
+const handleClass =
+  "!w-3 !h-3 !bg-white !border-2 !border-slate-400 !shadow-sm " +
+  "hover:!bg-slate-700 hover:!border-slate-700 hover:scale-125 transition-all duration-150";
 
 function NoteNode({ data, selected }: NodeProps<TreeNodeData>) {
-  const color = data.color || "yellow";
-  
-  const bgColors: Record<string, string> = {
-    slate: "bg-slate-100",
-    blue: "bg-blue-100",
-    green: "bg-green-100",
-    purple: "bg-purple-100",
-    orange: "bg-orange-100",
-    red: "bg-red-100",
-    pink: "bg-pink-100",
-    yellow: "bg-yellow-100",
-  };
-
-  const bg = bgColors[color] || bgColors.yellow;
+  const { cardStyle, titleStyle, badgeStyle, intensifyClassName } =
+    getNodeColorStyle(data.color ?? "#F59E0B", { selected });
 
   return (
     <div
-      className={`${bg} border-t-4 border-yellow-400 shadow-md transition-all min-w-[200px] max-w-[240px] ${
-        selected ? "ring-2 ring-slate-900 ring-offset-2" : ""
-      }`}
-      style={{
-        borderRadius: "2px 2px 4px 4px",
-      }}
+      className={`px-4 py-3.5 rounded-2xl border-2 shadow-md min-w-[200px] max-w-[280px] backdrop-blur-sm ${intensifyClassName}`}
+      style={cardStyle}
     >
-      <Handle
-        type="target"
-        position={Position.Left}
-        className="!w-3 !h-3 !bg-slate-400 !border-2 !border-white hover:!bg-slate-600 hover:scale-125 transition-transform"
-      />
-      <Handle
-        type="source"
-        position={Position.Right}
-        className="!w-3 !h-3 !bg-slate-400 !border-2 !border-white hover:!bg-slate-600 hover:scale-125 transition-transform"
-      />
+      <Handle type="target" position={Position.Left} className={handleClass} />
+      <Handle type="source" position={Position.Right} className={handleClass} />
+      <Handle type="source" position={Position.Bottom} className={handleClass} />
+      <Handle type="target" position={Position.Top} className={handleClass} />
 
-      <div className="px-4 py-3">
-        <div className="flex items-center gap-2 mb-2">
-          <span className="text-lg">📝</span>
-          <div className="font-semibold text-sm text-slate-700">
-            {data.title}
-          </div>
-        </div>
-
-        {data.description && (
-          <div className="text-xs text-slate-600 leading-relaxed whitespace-pre-wrap">
-            {data.description}
-          </div>
-        )}
-
-        {data.notes && (
-          <div className="mt-2 pt-2 border-t border-yellow-300 text-xs text-slate-500">
-            {data.notes}
-          </div>
-        )}
+      <div className="flex items-center gap-2.5 mb-2.5">
+        <div className="w-2.5 h-2.5 rounded-full flex-shrink-0 shadow-sm" style={badgeStyle} />
+        <span className="text-xs font-medium opacity-60" style={titleStyle}>NOTE</span>
       </div>
+
+      <div className="font-semibold text-sm leading-snug mb-1" style={titleStyle}>
+        {data.title || "Note"}
+      </div>
+
+      {data.description && (
+        <div className="text-xs text-slate-600 mt-2 line-clamp-3 leading-relaxed opacity-90">
+          {data.description}
+        </div>
+      )}
     </div>
   );
 }

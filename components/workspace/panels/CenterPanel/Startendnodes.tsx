@@ -1,42 +1,27 @@
 import { memo } from "react";
 import { Handle, Position, NodeProps } from "reactflow";
 import type { TreeNodeData } from "../../../../lib/tree/types";
+import { getNodeColorStyle } from "../../../../lib/tree/color";
 
-const colorClasses = {
-  slate: { bg: "bg-slate-100", border: "border-slate-400", text: "text-slate-900" },
-  blue: { bg: "bg-blue-100", border: "border-blue-400", text: "text-blue-900" },
-  green: { bg: "bg-green-100", border: "border-green-400", text: "text-green-900" },
-  purple: { bg: "bg-purple-100", border: "border-purple-400", text: "text-purple-900" },
-  orange: { bg: "bg-orange-100", border: "border-orange-400", text: "text-orange-900" },
-  red: { bg: "bg-red-100", border: "border-red-400", text: "text-red-900" },
-  pink: { bg: "bg-pink-100", border: "border-pink-400", text: "text-pink-900" },
-  yellow: { bg: "bg-yellow-100", border: "border-yellow-400", text: "text-yellow-900" },
-};
+const handleClass =
+  "!w-3 !h-3 !bg-white !border-2 !border-slate-400 !shadow-sm " +
+  "hover:!bg-slate-700 hover:!border-slate-700 hover:scale-125 transition-all duration-150";
 
 export const StartNode = memo(({ data, selected }: NodeProps<TreeNodeData>) => {
-  const color = data.color || "green";
-  const styles = colorClasses[color as keyof typeof colorClasses] || colorClasses.green;
+  const { cardStyle, titleStyle, intensifyClassName } =
+    getNodeColorStyle(data.color ?? "#22C55E", { selected });
 
   return (
     <div
-      className={`px-6 py-3 rounded-full border-2 shadow-sm transition-all min-w-[140px] ${
-        styles.bg
-      } ${styles.border} ${selected ? "ring-2 ring-slate-900 ring-offset-2" : ""}`}
+      className={`px-6 py-3.5 rounded-full border-2 shadow-md min-w-[160px] backdrop-blur-sm ${intensifyClassName}`}
+      style={cardStyle}
     >
-      <Handle
-        type="source"
-        position={Position.Right}
-        className="!w-3 !h-3 !bg-slate-400 !border-2 !border-white hover:!bg-slate-600 hover:scale-125 transition-transform"
-      />
-      <Handle
-        type="source"
-        position={Position.Bottom}
-        className="!w-3 !h-3 !bg-slate-400 !border-2 !border-white hover:!bg-slate-600 hover:scale-125 transition-transform"
-      />
+      <Handle type="source" position={Position.Right} className={handleClass} />
+      <Handle type="source" position={Position.Bottom} className={handleClass} />
 
       <div className="text-center">
-        <div className={`font-bold text-sm ${styles.text} whitespace-nowrap`}>
-          🚀 {data.title}
+        <div className="font-bold text-sm whitespace-nowrap" style={titleStyle}>
+          🚀 {data.title || "Start"}
         </div>
       </div>
     </div>
@@ -44,29 +29,20 @@ export const StartNode = memo(({ data, selected }: NodeProps<TreeNodeData>) => {
 });
 
 export const EndNode = memo(({ data, selected }: NodeProps<TreeNodeData>) => {
-  const color = data.color || "red";
-  const styles = colorClasses[color as keyof typeof colorClasses] || colorClasses.red;
+  const { cardStyle, titleStyle, intensifyClassName } =
+    getNodeColorStyle(data.color ?? "#EF4444", { selected });
 
   return (
     <div
-      className={`px-6 py-3 rounded-full border-2 shadow-sm transition-all min-w-[140px] ${
-        styles.bg
-      } ${styles.border} ${selected ? "ring-2 ring-slate-900 ring-offset-2" : ""}`}
+      className={`px-6 py-3.5 rounded-full border-2 shadow-md min-w-[160px] backdrop-blur-sm ${intensifyClassName}`}
+      style={cardStyle}
     >
-      <Handle
-        type="target"
-        position={Position.Left}
-        className="!w-3 !h-3 !bg-slate-400 !border-2 !border-white hover:!bg-slate-600 hover:scale-125 transition-transform"
-      />
-      <Handle
-        type="target"
-        position={Position.Top}
-        className="!w-3 !h-3 !bg-slate-400 !border-2 !border-white hover:!bg-slate-600 hover:scale-125 transition-transform"
-      />
+      <Handle type="target" position={Position.Left} className={handleClass} />
+      <Handle type="target" position={Position.Top} className={handleClass} />
 
       <div className="text-center">
-        <div className={`font-bold text-sm ${styles.text} whitespace-nowrap`}>
-          🏁 {data.title}
+        <div className="font-bold text-sm whitespace-nowrap" style={titleStyle}>
+          🏁 {data.title || "End"}
         </div>
       </div>
     </div>

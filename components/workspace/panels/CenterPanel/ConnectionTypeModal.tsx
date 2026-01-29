@@ -13,7 +13,7 @@ const connectionTypes: {
   label: string;
   description: string;
   icon: string;
-  color: string;
+  colorClass: string;
   needsLabel: boolean;
 }[] = [
   {
@@ -21,7 +21,7 @@ const connectionTypes: {
     label: "Child",
     description: "Direct child step - part of the parent's workflow",
     icon: "📋",
-    color: "bg-slate-50 border-slate-300 hover:bg-slate-100",
+    colorClass: "bg-slate-50 border-slate-300 hover:bg-slate-100 hover:border-slate-400",
     needsLabel: false,
   },
   {
@@ -29,7 +29,7 @@ const connectionTypes: {
     label: "Branch",
     description: "Alternative path or parallel workflow (requires label)",
     icon: "🔀",
-    color: "bg-blue-50 border-blue-300 hover:bg-blue-100",
+    colorClass: "bg-blue-50 border-blue-300 hover:bg-blue-100 hover:border-blue-400",
     needsLabel: true,
   },
   {
@@ -37,7 +37,7 @@ const connectionTypes: {
     label: "Dependency",
     description: "This node depends on the other node being completed",
     icon: "🔗",
-    color: "bg-orange-50 border-orange-300 hover:bg-orange-100",
+    colorClass: "bg-orange-50 border-orange-300 hover:bg-orange-100 hover:border-orange-400",
     needsLabel: false,
   },
   {
@@ -45,7 +45,7 @@ const connectionTypes: {
     label: "Prerequisite",
     description: "Must be completed before the other node can start",
     icon: "⚠️",
-    color: "bg-red-50 border-red-300 hover:bg-red-100",
+    colorClass: "bg-rose-50 border-rose-300 hover:bg-rose-100 hover:border-rose-400",
     needsLabel: false,
   },
   {
@@ -53,7 +53,7 @@ const connectionTypes: {
     label: "Reference",
     description: "Related information or context (not blocking)",
     icon: "🔖",
-    color: "bg-purple-50 border-purple-300 hover:bg-purple-100",
+    colorClass: "bg-purple-50 border-purple-300 hover:bg-purple-100 hover:border-purple-400",
     needsLabel: false,
   },
 ];
@@ -92,36 +92,38 @@ export default function ConnectionTypeModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm animate-in fade-in duration-200"
       onClick={onClose}
     >
       <div
-        className="bg-white rounded-2xl shadow-2xl p-6 max-w-md w-full mx-4"
+        className="bg-white rounded-2xl shadow-2xl max-w-md w-full mx-4 animate-in zoom-in-95 duration-200"
         onClick={(e) => e.stopPropagation()}
       >
         {!selectedType ? (
-          <>
-            <h2 className="text-lg font-semibold text-slate-900 mb-2">
-              Choose Connection Type
-            </h2>
-            <p className="text-sm text-slate-500 mb-4">
-              Select the relationship between these nodes
-            </p>
+          <div className="p-6">
+            <div className="mb-6">
+              <h2 className="text-xl font-semibold text-slate-900 mb-2">
+                Choose Connection Type
+              </h2>
+              <p className="text-sm text-slate-500">
+                Select the relationship between these nodes
+              </p>
+            </div>
 
-            <div className="space-y-2">
+            <div className="space-y-2.5 mb-6">
               {connectionTypes.map((conn) => (
                 <button
                   key={conn.type}
                   onClick={() => handleTypeClick(conn.type, conn.needsLabel)}
-                  className={`w-full text-left p-4 rounded-xl border-2 transition-all ${conn.color}`}
+                  className={`w-full text-left p-4 rounded-xl border-2 transition-all duration-200 shadow-sm hover:shadow ${conn.colorClass}`}
                 >
                   <div className="flex items-start gap-3">
-                    <span className="text-2xl">{conn.icon}</span>
-                    <div className="flex-1">
-                      <div className="font-medium text-sm text-slate-900">
+                    <span className="text-2xl flex-shrink-0">{conn.icon}</span>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-semibold text-sm text-slate-900 mb-0.5">
                         {conn.label}
                       </div>
-                      <div className="text-xs text-slate-600 mt-0.5">
+                      <div className="text-xs text-slate-600 leading-relaxed">
                         {conn.description}
                       </div>
                     </div>
@@ -132,19 +134,21 @@ export default function ConnectionTypeModal({
 
             <button
               onClick={onClose}
-              className="w-full mt-4 px-4 py-2 rounded-xl border border-slate-200 text-sm font-medium text-slate-700 hover:bg-slate-50"
+              className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm font-medium text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-all duration-200 shadow-sm"
             >
               Cancel
             </button>
-          </>
+          </div>
         ) : (
-          <>
-            <h2 className="text-lg font-semibold text-slate-900 mb-2">
-              Add Edge Label
-            </h2>
-            <p className="text-sm text-slate-500 mb-4">
-              Enter a label for this connection (e.g., "Yes", "No", "Option A")
-            </p>
+          <div className="p-6">
+            <div className="mb-6">
+              <h2 className="text-xl font-semibold text-slate-900 mb-2">
+                Add Edge Label
+              </h2>
+              <p className="text-sm text-slate-500">
+                Enter a label for this connection (e.g., "Yes", "No", "Option A")
+              </p>
+            </div>
 
             <input
               type="text"
@@ -154,28 +158,31 @@ export default function ConnectionTypeModal({
                 if (e.key === "Enter" && labelText.trim()) {
                   handleSubmitWithLabel();
                 }
+                if (e.key === "Escape") {
+                  handleBack();
+                }
               }}
               placeholder="Enter label..."
-              className="w-full px-4 py-3 rounded-xl border-2 border-slate-200 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+              className="w-full px-4 py-3 rounded-xl border-2 border-slate-300 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all shadow-sm mb-4"
               autoFocus
             />
 
-            <div className="flex gap-2 mt-4">
+            <div className="flex gap-2.5">
               <button
                 onClick={handleBack}
-                className="flex-1 px-4 py-2 rounded-xl border border-slate-200 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 text-sm font-medium text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-all duration-200 shadow-sm"
               >
                 Back
               </button>
               <button
                 onClick={handleSubmitWithLabel}
                 disabled={!labelText.trim()}
-                className="flex-1 px-4 py-2 rounded-xl bg-blue-500 text-sm font-medium text-white hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex-1 px-4 py-2.5 rounded-xl bg-gradient-to-br from-blue-600 to-blue-500 text-sm font-medium text-white hover:from-blue-500 hover:to-blue-400 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-150 shadow-md hover:shadow-lg disabled:hover:shadow-md"
               >
                 Create
               </button>
             </div>
-          </>
+          </div>
         )}
       </div>
     </div>

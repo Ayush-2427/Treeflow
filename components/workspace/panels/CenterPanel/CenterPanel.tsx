@@ -94,14 +94,14 @@ function CustomEdge({
                 if (e.key === "Enter") handleLabelSubmit();
                 if (e.key === "Escape") setIsEditing(false);
               }}
-              className="px-2 py-1 text-xs border-2 border-blue-400 rounded bg-white shadow-lg outline-none"
+              className="px-3 py-1.5 text-xs border-2 border-blue-500 rounded-lg bg-white shadow-lg outline-none font-medium"
               autoFocus
               onClick={(e) => e.stopPropagation()}
             />
           ) : (
             <div
               onDoubleClick={handleLabelDoubleClick}
-              className="px-2 py-1 text-xs font-medium bg-white/90 border border-slate-200 rounded shadow-sm cursor-pointer hover:bg-white hover:border-slate-300 transition-all"
+              className="px-3 py-1.5 text-xs font-medium bg-white border border-slate-300 rounded-lg shadow-sm cursor-pointer hover:bg-slate-50 hover:border-slate-400 hover:shadow transition-all"
               title="Double-click to edit"
             >
               {editLabel || "empty"}
@@ -272,7 +272,7 @@ export default function CenterPanel({ isFullscreen = false }: CenterPanelProps) 
       let menuY = event.clientY - rect.top;
 
       const menuWidth = 200;
-      const menuHeight = 260;
+      const menuHeight = 280;
 
       if (menuX + menuWidth > rect.width) menuX = rect.width - menuWidth - 10;
       if (menuY + menuHeight > rect.height) menuY = rect.height - menuHeight - 10;
@@ -433,32 +433,33 @@ export default function CenterPanel({ isFullscreen = false }: CenterPanelProps) 
 
   return (
     <div className="flex h-full flex-col">
-      <div className="mb-3 flex items-center justify-between">
+      {/* Premium Toolbar */}
+      <div className="mb-4 flex items-center justify-between rounded-2xl border border-slate-200 bg-white/80 backdrop-blur-sm p-4 shadow-sm">
         <div>
-          <h2 className="text-sm font-semibold">TreeFlow Canvas</h2>
-          <p className="mt-1 text-xs text-slate-500">
-            Left drag on empty space selects • Right drag pans • Right click adds node
+          <h2 className="text-base font-semibold text-slate-900">TreeFlow Canvas</h2>
+          <p className="mt-0.5 text-xs text-slate-500">
+            Design and visualize your workflows
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2.5">
           {!isFullscreen && (
             <button
               onClick={handleFullscreen}
-              className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-medium hover:bg-slate-50 transition-all"
+              className="group rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-all duration-200 shadow-sm hover:shadow"
               type="button"
             >
-              ⛶ Fullscreen
+              <span className="inline-block group-hover:scale-110 transition-transform">⛶</span> Fullscreen
             </button>
           )}
           <button
-            className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-medium hover:bg-slate-50"
+            className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-all duration-200 shadow-sm hover:shadow"
             type="button"
           >
             Auto Layout
           </button>
           <button
-            className="rounded-xl bg-slate-900 px-3 py-2 text-xs font-medium text-white hover:bg-slate-800"
+            className="rounded-xl bg-gradient-to-br from-slate-900 to-slate-800 px-4 py-2 text-xs font-medium text-white hover:from-slate-800 hover:to-slate-700 active:scale-95 transition-all duration-150 shadow-md hover:shadow-lg"
             type="button"
           >
             Export
@@ -466,9 +467,10 @@ export default function CenterPanel({ isFullscreen = false }: CenterPanelProps) 
         </div>
       </div>
 
+      {/* Canvas Container */}
       <div
         ref={wrapperRef}
-        className="relative flex-1 rounded-xl border border-slate-200 bg-white"
+        className="relative flex-1 rounded-2xl border-2 border-slate-200 bg-white shadow-lg overflow-hidden"
         onMouseDown={(e) => {
           if (e.button !== 2) return;
           rightMouseDownRef.current = true;
@@ -524,24 +526,31 @@ export default function CenterPanel({ isFullscreen = false }: CenterPanelProps) 
           defaultViewport={viewport}
           onMoveEnd={handleMoveEnd}
         >
-          <Background />
-          <Controls />
-          <MiniMap />
+          <Background gap={16} size={1} color="#e2e8f0" />
+          <Controls className="!border-slate-200 !bg-white/90 !backdrop-blur-sm !shadow-lg !rounded-xl" />
+          <MiniMap
+            className="!border-slate-200 !bg-white/90 !backdrop-blur-sm !shadow-lg !rounded-xl"
+            nodeColor={(node) => {
+              const color = node.data?.color as string;
+              return color && /^#[0-9A-F]{6}$/i.test(color) ? color : "#64748B";
+            }}
+          />
         </ReactFlow>
 
+        {/* Add Node Context Menu */}
         {contextMenu.isOpen && (
           <div
-            className="absolute z-50 min-w-[180px] rounded-xl border border-slate-200 bg-white py-2 shadow-xl"
+            className="absolute z-50 min-w-[200px] rounded-xl border border-slate-200 bg-white/95 backdrop-blur-sm py-2 shadow-2xl"
             style={{ top: contextMenu.position.y, left: contextMenu.position.x }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="mb-1 border-b border-slate-100 px-3 py-1 text-xs font-semibold text-slate-500">
+            <div className="mb-1 border-b border-slate-100 px-4 py-2 text-[10px] font-semibold text-slate-500 uppercase tracking-wider">
               Add Node
             </div>
 
             <button
               onClick={() => handleAddNode("process")}
-              className="flex w-full items-center gap-3 px-4 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
+              className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm text-slate-700 hover:bg-slate-50 transition-colors"
               type="button"
             >
               <span className="text-lg">▭</span>
@@ -550,7 +559,7 @@ export default function CenterPanel({ isFullscreen = false }: CenterPanelProps) 
 
             <button
               onClick={() => handleAddNode("decision")}
-              className="flex w-full items-center gap-3 px-4 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
+              className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm text-slate-700 hover:bg-slate-50 transition-colors"
               type="button"
             >
               <span className="text-lg">◆</span>
@@ -559,7 +568,7 @@ export default function CenterPanel({ isFullscreen = false }: CenterPanelProps) 
 
             <button
               onClick={() => handleAddNode("start")}
-              className="flex w-full items-center gap-3 px-4 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
+              className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm text-slate-700 hover:bg-slate-50 transition-colors"
               type="button"
             >
               <span className="text-lg">🚀</span>
@@ -568,7 +577,7 @@ export default function CenterPanel({ isFullscreen = false }: CenterPanelProps) 
 
             <button
               onClick={() => handleAddNode("end")}
-              className="flex w-full items-center gap-3 px-4 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
+              className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm text-slate-700 hover:bg-slate-50 transition-colors"
               type="button"
             >
               <span className="text-lg">🏁</span>
@@ -577,7 +586,7 @@ export default function CenterPanel({ isFullscreen = false }: CenterPanelProps) 
 
             <button
               onClick={() => handleAddNode("note")}
-              className="flex w-full items-center gap-3 px-4 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
+              className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm text-slate-700 hover:bg-slate-50 transition-colors"
               type="button"
             >
               <span className="text-lg">📝</span>
@@ -586,13 +595,14 @@ export default function CenterPanel({ isFullscreen = false }: CenterPanelProps) 
           </div>
         )}
 
+        {/* Edge Context Menu */}
         {edgeMenu.isOpen && edgeMenu.edgeId && (
           <div
-            className="absolute z-50 min-w-[200px] rounded-xl border border-slate-200 bg-white py-2 shadow-xl"
+            className="absolute z-50 min-w-[220px] rounded-xl border border-slate-200 bg-white/95 backdrop-blur-sm py-2 shadow-2xl"
             style={{ top: edgeMenu.position.y, left: edgeMenu.position.x }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="mb-1 border-b border-slate-100 px-3 py-1 text-xs font-semibold text-slate-500">
+            <div className="mb-1 border-b border-slate-100 px-4 py-2 text-[10px] font-semibold text-slate-500 uppercase tracking-wider">
               Connection
             </div>
 
@@ -607,7 +617,7 @@ export default function CenterPanel({ isFullscreen = false }: CenterPanelProps) 
                 if (next !== null) updateEdgeLabel(edgeMenu.edgeId!, next);
                 setEdgeMenu({ isOpen: false, edgeId: null, position: { x: 0, y: 0 } });
               }}
-              className="flex w-full items-center gap-3 px-4 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
+              className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm text-slate-700 hover:bg-slate-50 transition-colors"
               type="button"
             >
               <span className="text-lg">✏️</span>
@@ -620,7 +630,7 @@ export default function CenterPanel({ isFullscreen = false }: CenterPanelProps) 
                 if (ok) deleteEdge(edgeMenu.edgeId!);
                 setEdgeMenu({ isOpen: false, edgeId: null, position: { x: 0, y: 0 } });
               }}
-              className="flex w-full items-center gap-3 px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50"
+              className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm text-rose-600 hover:bg-rose-50 transition-colors"
               type="button"
             >
               <span className="text-lg">🗑️</span>
@@ -629,6 +639,7 @@ export default function CenterPanel({ isFullscreen = false }: CenterPanelProps) 
           </div>
         )}
 
+        {/* Compact Inspector Popup */}
         {compactInspector.isOpen && inspectorNode && (
           <NodeInspector
             node={inspectorNode}
@@ -644,20 +655,27 @@ export default function CenterPanel({ isFullscreen = false }: CenterPanelProps) 
         )}
       </div>
 
-      <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
-        <div className="grid grid-cols-2 gap-4 text-xs text-slate-600">
-          <div className="space-y-1">
-            <p className="font-semibold text-slate-700">Canvas:</p>
-            <p>• Left drag empty space selects</p>
-            <p>• Right drag pans</p>
-            <p>• Right click empty space opens Add Node</p>
-            <p>• Delete/Backspace removes selected nodes</p>
+      {/* Usage Hints */}
+      <div className="mt-4 rounded-2xl border border-slate-200 bg-gradient-to-br from-white to-slate-50 p-4 shadow-sm">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 text-xs text-slate-600">
+          <div className="space-y-2">
+            <p className="font-semibold text-slate-900 flex items-center gap-2">
+              <span className="w-5 h-5 rounded-md bg-blue-100 text-blue-600 flex items-center justify-center text-[10px]">🖱️</span>
+              Canvas Controls
+            </p>
+            <p className="pl-7">• Left drag empty space to select multiple nodes</p>
+            <p className="pl-7">• Right drag to pan around the canvas</p>
+            <p className="pl-7">• Right click empty space to add new nodes</p>
+            <p className="pl-7">• Delete/Backspace to remove selected nodes</p>
           </div>
-          <div className="space-y-1">
-            <p className="font-semibold text-slate-700">Edges:</p>
-            <p>• Double-click label to edit</p>
-            <p>• Right-click edge for options</p>
-            <p>• Drag handles to connect</p>
+          <div className="space-y-2">
+            <p className="font-semibold text-slate-900 flex items-center gap-2">
+              <span className="w-5 h-5 rounded-md bg-emerald-100 text-emerald-600 flex items-center justify-center text-[10px]">🔗</span>
+              Connections
+            </p>
+            <p className="pl-7">• Drag from node handles to create connections</p>
+            <p className="pl-7">• Double-click edge labels to edit them</p>
+            <p className="pl-7">• Right-click edges for more options</p>
           </div>
         </div>
       </div>

@@ -1,68 +1,40 @@
 import { memo } from "react";
 import { Handle, Position, NodeProps } from "reactflow";
 import type { TreeNodeData } from "../../../../lib/tree/types";
+import { getNodeColorStyle } from "../../../../lib/tree/color";
 
-const colorClasses = {
-  slate: { bg: "bg-slate-50", border: "border-slate-300", text: "text-slate-900", badge: "bg-slate-500" },
-  blue: { bg: "bg-blue-50", border: "border-blue-300", text: "text-blue-900", badge: "bg-blue-500" },
-  green: { bg: "bg-green-50", border: "border-green-300", text: "text-green-900", badge: "bg-green-500" },
-  purple: { bg: "bg-purple-50", border: "border-purple-300", text: "text-purple-900", badge: "bg-purple-500" },
-  orange: { bg: "bg-orange-50", border: "border-orange-300", text: "text-orange-900", badge: "bg-orange-500" },
-  red: { bg: "bg-red-50", border: "border-red-300", text: "text-red-900", badge: "bg-red-500" },
-  pink: { bg: "bg-pink-50", border: "border-pink-300", text: "text-pink-900", badge: "bg-pink-500" },
-  yellow: { bg: "bg-yellow-50", border: "border-yellow-300", text: "text-yellow-900", badge: "bg-yellow-500" },
-};
+const handleClass =
+  "!w-3 !h-3 !bg-white !border-2 !border-slate-400 !shadow-sm " +
+  "hover:!bg-slate-700 hover:!border-slate-700 hover:scale-125 transition-all duration-150";
 
 function ProcessNode({ data, selected }: NodeProps<TreeNodeData>) {
-  const color = data.color || "slate";
-  const styles = colorClasses[color as keyof typeof colorClasses] || colorClasses.slate;
+  const { cardStyle, titleStyle, badgeStyle, intensifyClassName } =
+    getNodeColorStyle(data.color, { selected });
 
   return (
     <div
-      className={`rounded-xl border-2 shadow-sm transition-all min-w-[180px] ${
-        styles.bg
-      } ${styles.border} ${selected ? "ring-2 ring-slate-900 ring-offset-2" : ""}`}
+      className={`rounded-2xl border-2 shadow-md min-w-[200px] max-w-[280px] backdrop-blur-sm ${intensifyClassName}`}
+      style={cardStyle}
     >
-      {/* Connection Handles */}
-      <Handle
-        type="target"
-        position={Position.Left}
-        className="!w-3 !h-3 !bg-slate-400 !border-2 !border-white hover:!bg-slate-600 hover:scale-125 transition-transform"
-      />
-      <Handle
-        type="source"
-        position={Position.Right}
-        className="!w-3 !h-3 !bg-slate-400 !border-2 !border-white hover:!bg-slate-600 hover:scale-125 transition-transform"
-      />
-      <Handle
-        type="source"
-        position={Position.Bottom}
-        className="!w-3 !h-3 !bg-slate-400 !border-2 !border-white hover:!bg-slate-600 hover:scale-125 transition-transform"
-      />
-      <Handle
-        type="target"
-        position={Position.Top}
-        className="!w-3 !h-3 !bg-slate-400 !border-2 !border-white hover:!bg-slate-600 hover:scale-125 transition-transform"
-      />
+      <Handle type="target" position={Position.Left} className={handleClass} />
+      <Handle type="source" position={Position.Right} className={handleClass} />
+      <Handle type="source" position={Position.Bottom} className={handleClass} />
+      <Handle type="target" position={Position.Top} className={handleClass} />
 
-      {/* Content - Fixed alignment */}
-      <div className="px-4 py-3">
-        {/* Header with color badge and completion */}
-        <div className="flex items-center gap-2 mb-2">
-          <div className={`w-2 h-2 rounded-full ${styles.badge} flex-shrink-0`} />
+      <div className="px-4 py-3.5">
+        <div className="flex items-center gap-2.5 mb-2.5">
+          <div className="w-2.5 h-2.5 rounded-full flex-shrink-0 shadow-sm" style={badgeStyle} />
           {data.completed && (
-            <span className="text-green-600 text-sm font-bold flex-shrink-0">✓</span>
+            <span className="text-emerald-600 text-sm font-bold flex-shrink-0 drop-shadow-sm">✓</span>
           )}
         </div>
 
-        {/* Title */}
-        <div className={`font-medium text-sm leading-tight ${styles.text}`}>
-          {data.title}
+        <div className="font-semibold text-sm leading-snug mb-1" style={titleStyle}>
+          {data.title || "Process"}
         </div>
 
-        {/* Description Preview */}
         {data.description && (
-          <div className="text-xs text-slate-500 mt-2 line-clamp-2 leading-snug">
+          <div className="text-xs text-slate-600 mt-2 line-clamp-2 leading-relaxed opacity-90">
             {data.description}
           </div>
         )}
