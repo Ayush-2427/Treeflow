@@ -383,7 +383,6 @@ export default function CenterPanel({ isFullscreen = false }: CenterPanelProps) 
 
       selectNode(node.id);
 
-      // Clicking a node closes Add Node menu, keeps node inspector
       setContextMenu({
         isOpen: false,
         position: { x: 0, y: 0 },
@@ -391,7 +390,6 @@ export default function CenterPanel({ isFullscreen = false }: CenterPanelProps) 
       });
       setEdgeMenu({ isOpen: false, edgeId: null, position: { x: 0, y: 0 } });
 
-      // Show compact inspector (fullscreen or small screens)
       if (isFullscreen || window.innerWidth < 1024) {
         if (!wrapperRef.current) return;
         const rect = wrapperRef.current.getBoundingClientRect();
@@ -434,7 +432,9 @@ export default function CenterPanel({ isFullscreen = false }: CenterPanelProps) 
   return (
     <div className="flex h-full flex-col">
       {/* Premium Toolbar */}
-      <div className="mb-4 flex items-center justify-between rounded-2xl border border-slate-200 bg-white/80 backdrop-blur-sm p-4 shadow-sm">
+      <div
+        className={`${isFullscreen ? "mb-2" : "mb-4"} flex items-center justify-between rounded-2xl border border-slate-200 bg-white/80 backdrop-blur-sm p-4 shadow-sm`}
+      >
         <div>
           <h2 className="text-base font-semibold text-slate-900">TreeFlow Canvas</h2>
           <p className="mt-0.5 text-xs text-slate-500">
@@ -449,15 +449,20 @@ export default function CenterPanel({ isFullscreen = false }: CenterPanelProps) 
               className="group rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-all duration-200 shadow-sm hover:shadow"
               type="button"
             >
-              <span className="inline-block group-hover:scale-110 transition-transform">⛶</span> Fullscreen
+              <span className="inline-block group-hover:scale-110 transition-transform">
+                ⛶
+              </span>{" "}
+              Fullscreen
             </button>
           )}
+
           <button
             className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-all duration-200 shadow-sm hover:shadow"
             type="button"
           >
             Auto Layout
           </button>
+
           <button
             className="rounded-xl bg-gradient-to-br from-slate-900 to-slate-800 px-4 py-2 text-xs font-medium text-white hover:from-slate-800 hover:to-slate-700 active:scale-95 transition-all duration-150 shadow-md hover:shadow-lg"
             type="button"
@@ -521,7 +526,7 @@ export default function CenterPanel({ isFullscreen = false }: CenterPanelProps) 
           selectNodesOnDrag={true}
           selectionMode={SelectionMode.Partial}
           panOnDrag={[2]}
-          minZoom={0.02}
+          minZoom={0.12}
           maxZoom={2}
           defaultViewport={viewport}
           onMoveEnd={handleMoveEnd}
@@ -655,30 +660,37 @@ export default function CenterPanel({ isFullscreen = false }: CenterPanelProps) 
         )}
       </div>
 
-      {/* Usage Hints */}
-      <div className="mt-4 rounded-2xl border border-slate-200 bg-gradient-to-br from-white to-slate-50 p-4 shadow-sm">
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 text-xs text-slate-600">
-          <div className="space-y-2">
-            <p className="font-semibold text-slate-900 flex items-center gap-2">
-              <span className="w-5 h-5 rounded-md bg-blue-100 text-blue-600 flex items-center justify-center text-[10px]">🖱️</span>
-              Canvas Controls
-            </p>
-            <p className="pl-7">• Left drag empty space to select multiple nodes</p>
-            <p className="pl-7">• Right drag to pan around the canvas</p>
-            <p className="pl-7">• Right click empty space to add new nodes</p>
-            <p className="pl-7">• Delete/Backspace to remove selected nodes</p>
-          </div>
-          <div className="space-y-2">
-            <p className="font-semibold text-slate-900 flex items-center gap-2">
-              <span className="w-5 h-5 rounded-md bg-emerald-100 text-emerald-600 flex items-center justify-center text-[10px]">🔗</span>
-              Connections
-            </p>
-            <p className="pl-7">• Drag from node handles to create connections</p>
-            <p className="pl-7">• Double-click edge labels to edit them</p>
-            <p className="pl-7">• Right-click edges for more options</p>
+      {/* Usage Hints show only in normal view */}
+      {!isFullscreen && (
+        <div className="mt-4 rounded-2xl border border-slate-200 bg-gradient-to-br from-white to-slate-50 p-4 shadow-sm">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 text-xs text-slate-600">
+            <div className="space-y-2">
+              <p className="font-semibold text-slate-900 flex items-center gap-2">
+                <span className="w-5 h-5 rounded-md bg-blue-100 text-blue-600 flex items-center justify-center text-[10px]">
+                  🖱️
+                </span>
+                Canvas Controls
+              </p>
+              <p className="pl-7">• Left drag empty space to select multiple nodes</p>
+              <p className="pl-7">• Right drag to pan around the canvas</p>
+              <p className="pl-7">• Right click empty space to add new nodes</p>
+              <p className="pl-7">• Delete/Backspace to remove selected nodes</p>
+            </div>
+
+            <div className="space-y-2">
+              <p className="font-semibold text-slate-900 flex items-center gap-2">
+                <span className="w-5 h-5 rounded-md bg-emerald-100 text-emerald-600 flex items-center justify-center text-[10px]">
+                  🔗
+                </span>
+                Connections
+              </p>
+              <p className="pl-7">• Drag from node handles to create connections</p>
+              <p className="pl-7">• Double-click edge labels to edit them</p>
+              <p className="pl-7">• Right-click edges for more options</p>
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       <ConnectionTypeModal
         isOpen={!!pendingConnection}
