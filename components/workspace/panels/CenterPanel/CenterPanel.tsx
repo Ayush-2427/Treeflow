@@ -9,10 +9,6 @@ import ReactFlow, {
   type Connection,
   type NodeTypes,
   type EdgeTypes,
-  type EdgeProps,
-  getBezierPath,
-  BaseEdge,
-  EdgeLabelRenderer,
   SelectionMode,
   type Viewport,
 } from "reactflow";
@@ -26,92 +22,12 @@ import { StartNode, EndNode } from "./Startendnodes";
 import NoteNode from "./Notenode";
 import ConnectionTypeModal from "./ConnectionTypeModal";
 import NodeInspector from "./Nodeinspector";
+import CustomEdge from "./CustomEdge";
+import CanvasMenus from "./CanvasMenus";
+
 import type { ConnectionType, NodeType } from "../../../../lib/tree/types";
 
 import "reactflow/dist/style.css";
-
-// Custom Edge with editable label
-function CustomEdge({
-  id,
-  sourceX,
-  sourceY,
-  targetX,
-  targetY,
-  sourcePosition,
-  targetPosition,
-  data,
-  label,
-}: EdgeProps) {
-  const [edgePath, labelX, labelY] = getBezierPath({
-    sourceX,
-    sourceY,
-    sourcePosition,
-    targetX,
-    targetY,
-    targetPosition,
-  });
-
-  const [isEditing, setIsEditing] = useState(false);
-  const [editLabel, setEditLabel] = useState<string>(
-    (data?.label as string) || (label as string) || ""
-  );
-
-  const updateEdgeLabel = useTreeStore((s) => s.updateEdgeLabel);
-
-  useEffect(() => {
-    setEditLabel((data?.label as string) || (label as string) || "");
-  }, [data?.label, label]);
-
-  const handleLabelDoubleClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setIsEditing(true);
-  };
-
-  const handleLabelSubmit = () => {
-    updateEdgeLabel(id, editLabel.trim());
-    setIsEditing(false);
-  };
-
-  return (
-    <>
-      <BaseEdge id={id} path={edgePath} />
-      <EdgeLabelRenderer>
-        <div
-          style={{
-            position: "absolute",
-            transform: `translate(-50%, -50%) translate(${labelX}px,${labelY}px)`,
-            pointerEvents: "all",
-          }}
-          className="nodrag nopan"
-        >
-          {isEditing ? (
-            <input
-              type="text"
-              value={editLabel}
-              onChange={(e) => setEditLabel(e.target.value)}
-              onBlur={handleLabelSubmit}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") handleLabelSubmit();
-                if (e.key === "Escape") setIsEditing(false);
-              }}
-              className="px-3 py-1.5 text-xs border-2 border-blue-500 rounded-lg bg-white shadow-lg outline-none font-medium"
-              autoFocus
-              onClick={(e) => e.stopPropagation()}
-            />
-          ) : (
-            <div
-              onDoubleClick={handleLabelDoubleClick}
-              className="px-3 py-1.5 text-xs font-medium bg-white border border-slate-300 rounded-lg shadow-sm cursor-pointer hover:bg-slate-50 hover:border-slate-400 hover:shadow transition-all"
-              title="Double-click to edit"
-            >
-              {editLabel || "empty"}
-            </div>
-          )}
-        </div>
-      </EdgeLabelRenderer>
-    </>
-  );
-}
 
 interface CenterPanelProps {
   isFullscreen?: boolean;
@@ -180,15 +96,12 @@ export default function CenterPanel({ isFullscreen = false }: CenterPanelProps) 
 
   const { screenToFlowPosition, getNodes } = useReactFlow();
 
-  // Load persisted tree on mount
   useEffect(() => {
     loadTree(treeId);
   }, [loadTree, treeId]);
 
-  // Auto-save whenever nodes/edges/viewport changes
   useAutoSave(treeId, 600);
 
-  // Persist viewport after user finishes moving/zooming
   const handleMoveEnd = useCallback(
     (_: any, vp: Viewport) => {
       setViewport(vp);
@@ -228,7 +141,6 @@ export default function CenterPanel({ isFullscreen = false }: CenterPanelProps) 
     });
   }, []);
 
-  // Keyboard delete (with focus guard)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement;
@@ -262,7 +174,6 @@ export default function CenterPanel({ isFullscreen = false }: CenterPanelProps) 
       event.preventDefault();
       event.stopPropagation();
 
-      // If user panned with right drag, do not open menu on release
       if (rightDraggedRef.current) return;
 
       if (!wrapperRef.current) return;
@@ -338,47 +249,43 @@ export default function CenterPanel({ isFullscreen = false }: CenterPanelProps) 
     setPendingConnection(null);
   }, [setPendingConnection]);
 
-  const handleEdgeContextMenu = useCallback(
-    (event: React.MouseEvent, edge: any) => {
-      event.preventDefault();
-      event.stopPropagation();
+  const handleEdgeContextMenu = useCallback((event: React.MouseEvent, edge: any) => {
+    event.preventDefault();
+    event.stopPropagation();
 
-      if (!wrapperRef.current) return;
-      const rect = wrapperRef.current.getBoundingClientRect();
+    if (!wrapperRef.current) return;
+    const rect = wrapperRef.current.getBoundingClientRect();
 
-      let menuX = event.clientX - rect.left;
-      let menuY = event.clientY - rect.top;
+    let menuX = event.clientX - rect.left;
+    let menuY = event.clientY - rect.top;
 
-      const menuWidth = 220;
-      const menuHeight = 120;
+    const menuWidth = 220;
+    const menuHeight = 120;
 
-      if (menuX + menuWidth > rect.width) menuX = rect.width - menuWidth - 10;
-      if (menuY + menuHeight > rect.height) menuY = rect.height - menuHeight - 10;
-      if (menuX < 10) menuX = 10;
-      if (menuY < 10) menuY = 10;
+    if (menuX + menuWidth > rect.width) menuX = rect.width - menuWidth - 10;
+    if (menuY + menuHeight > rect.height) menuY = rect.height - menuHeight - 10;
+    if (menuX < 10) menuX = 10;
+    if (menuY < 10) menuY = 10;
 
-      setContextMenu({
-        isOpen: false,
-        position: { x: 0, y: 0 },
-        flowPosition: { x: 0, y: 0 },
-      });
-      setCompactInspector({
-        isOpen: false,
-        nodeId: null,
-        position: { x: 0, y: 0 },
-      });
-      setEdgeMenu({
-        isOpen: true,
-        edgeId: edge.id,
-        position: { x: menuX, y: menuY },
-      });
-    },
-    []
-  );
+    setContextMenu({
+      isOpen: false,
+      position: { x: 0, y: 0 },
+      flowPosition: { x: 0, y: 0 },
+    });
+    setCompactInspector({
+      isOpen: false,
+      nodeId: null,
+      position: { x: 0, y: 0 },
+    });
+    setEdgeMenu({
+      isOpen: true,
+      edgeId: edge.id,
+      position: { x: menuX, y: menuY },
+    });
+  }, []);
 
   const handleNodeClick = useCallback(
     (event: React.MouseEvent, node: any) => {
-      // only react to left click
       if (event.button !== 0) return;
 
       selectNode(node.id);
@@ -431,7 +338,6 @@ export default function CenterPanel({ isFullscreen = false }: CenterPanelProps) 
 
   return (
     <div className="flex h-full flex-col">
-      {/* Premium Toolbar */}
       <div
         className={`${isFullscreen ? "mb-2" : "mb-4"} flex items-center justify-between rounded-2xl border border-slate-200 bg-white/80 backdrop-blur-sm p-4 shadow-sm`}
       >
@@ -472,7 +378,6 @@ export default function CenterPanel({ isFullscreen = false }: CenterPanelProps) 
         </div>
       </div>
 
-      {/* Canvas Container */}
       <div
         ref={wrapperRef}
         className="relative flex-1 rounded-2xl border-2 border-slate-200 bg-white shadow-lg overflow-hidden"
@@ -542,109 +447,18 @@ export default function CenterPanel({ isFullscreen = false }: CenterPanelProps) 
           />
         </ReactFlow>
 
-        {/* Add Node Context Menu */}
-        {contextMenu.isOpen && (
-          <div
-            className="absolute z-50 min-w-[200px] rounded-xl border border-slate-200 bg-white/95 backdrop-blur-sm py-2 shadow-2xl"
-            style={{ top: contextMenu.position.y, left: contextMenu.position.x }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="mb-1 border-b border-slate-100 px-4 py-2 text-[10px] font-semibold text-slate-500 uppercase tracking-wider">
-              Add Node
-            </div>
+        <CanvasMenus
+          contextMenu={contextMenu}
+          edgeMenu={edgeMenu}
+          onAddNode={handleAddNode}
+          edges={edges}
+          onEditEdgeLabel={(edgeId, nextLabel) => updateEdgeLabel(edgeId, nextLabel)}
+          onDeleteEdge={(edgeId) => deleteEdge(edgeId)}
+          onCloseEdgeMenu={() =>
+            setEdgeMenu({ isOpen: false, edgeId: null, position: { x: 0, y: 0 } })
+          }
+        />
 
-            <button
-              onClick={() => handleAddNode("process")}
-              className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm text-slate-700 hover:bg-slate-50 transition-colors"
-              type="button"
-            >
-              <span className="text-lg">▭</span>
-              <span>Process</span>
-            </button>
-
-            <button
-              onClick={() => handleAddNode("decision")}
-              className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm text-slate-700 hover:bg-slate-50 transition-colors"
-              type="button"
-            >
-              <span className="text-lg">◆</span>
-              <span>Decision</span>
-            </button>
-
-            <button
-              onClick={() => handleAddNode("start")}
-              className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm text-slate-700 hover:bg-slate-50 transition-colors"
-              type="button"
-            >
-              <span className="text-lg">🚀</span>
-              <span>Start</span>
-            </button>
-
-            <button
-              onClick={() => handleAddNode("end")}
-              className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm text-slate-700 hover:bg-slate-50 transition-colors"
-              type="button"
-            >
-              <span className="text-lg">🏁</span>
-              <span>End</span>
-            </button>
-
-            <button
-              onClick={() => handleAddNode("note")}
-              className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm text-slate-700 hover:bg-slate-50 transition-colors"
-              type="button"
-            >
-              <span className="text-lg">📝</span>
-              <span>Note</span>
-            </button>
-          </div>
-        )}
-
-        {/* Edge Context Menu */}
-        {edgeMenu.isOpen && edgeMenu.edgeId && (
-          <div
-            className="absolute z-50 min-w-[220px] rounded-xl border border-slate-200 bg-white/95 backdrop-blur-sm py-2 shadow-2xl"
-            style={{ top: edgeMenu.position.y, left: edgeMenu.position.x }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="mb-1 border-b border-slate-100 px-4 py-2 text-[10px] font-semibold text-slate-500 uppercase tracking-wider">
-              Connection
-            </div>
-
-            <button
-              onClick={() => {
-                const current = edges.find((e) => e.id === edgeMenu.edgeId);
-                const currentLabel =
-                  (current?.data as any)?.label ??
-                  (current?.label as string) ??
-                  "";
-                const next = window.prompt("Edit label:", currentLabel);
-                if (next !== null) updateEdgeLabel(edgeMenu.edgeId!, next);
-                setEdgeMenu({ isOpen: false, edgeId: null, position: { x: 0, y: 0 } });
-              }}
-              className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm text-slate-700 hover:bg-slate-50 transition-colors"
-              type="button"
-            >
-              <span className="text-lg">✏️</span>
-              <span>Edit label</span>
-            </button>
-
-            <button
-              onClick={() => {
-                const ok = window.confirm("Delete this connection?");
-                if (ok) deleteEdge(edgeMenu.edgeId!);
-                setEdgeMenu({ isOpen: false, edgeId: null, position: { x: 0, y: 0 } });
-              }}
-              className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm text-rose-600 hover:bg-rose-50 transition-colors"
-              type="button"
-            >
-              <span className="text-lg">🗑️</span>
-              <span>Delete</span>
-            </button>
-          </div>
-        )}
-
-        {/* Compact Inspector Popup */}
         {compactInspector.isOpen && inspectorNode && (
           <NodeInspector
             node={inspectorNode}
@@ -660,7 +474,6 @@ export default function CenterPanel({ isFullscreen = false }: CenterPanelProps) 
         )}
       </div>
 
-      {/* Usage Hints show only in normal view */}
       {!isFullscreen && (
         <div className="mt-4 rounded-2xl border border-slate-200 bg-gradient-to-br from-white to-slate-50 p-4 shadow-sm">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 text-xs text-slate-600">
