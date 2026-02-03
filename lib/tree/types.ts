@@ -5,15 +5,21 @@ export interface TreeNodeData {
   description?: string;
   notes?: string;
   completed: boolean;
-  color?: string;
-  nodeType: NodeType; // Type of flowchart node
+  color?: string; // accepts hex like "#3B82F6" OR theme name like "slate"
+  nodeType: NodeType;
+  iconKey?: string; // key into NODE_ICONS
 }
 
-export type ConnectionType = "child" | "branch" | "dependency" | "prerequisite" | "reference";
+export type ConnectionType =
+  | "child"
+  | "branch"
+  | "dependency"
+  | "prerequisite"
+  | "reference";
 
 export interface ConnectionData {
   type: ConnectionType;
-  label?: string; // Edge label for conditions
+  label?: string;
 }
 
 export interface TreeMeta {
@@ -28,5 +34,5 @@ export interface ChatMessage {
   role: "user" | "assistant";
   content: string;
   createdAt: number;
-  scope: string; // "workspace" or "node:nodeId"
+  scope: string;
 }

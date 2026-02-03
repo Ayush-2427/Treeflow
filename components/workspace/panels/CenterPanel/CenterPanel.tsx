@@ -16,15 +16,14 @@ import ReactFlow, {
 import { useTreeStore } from "../../../../lib/tree/store";
 import { useAutoSave } from "../../../../lib/tree/hooks/useAutoSave";
 
-import ProcessNode from "./Processnode";
-import DecisionNode from "./Decisionnode";
-import { StartNode, EndNode } from "./Startendnodes";
-import NoteNode from "./Notenode";
+
 import ConnectionTypeModal from "./ConnectionTypeModal";
 import NodeInspector from "./Nodeinspector";
 import CustomEdge from "./CustomEdge";
 import CanvasMenus from "./CanvasMenus";
 import TreeFlowHeader from "./TreeFlowHeader";
+import TreeNode from "../../nodes/TreeNode";
+
 
 import type { ConnectionType, NodeType } from "../../../../lib/tree/types";
 
@@ -117,16 +116,17 @@ export default function CenterPanel({ isFullscreen = false }: CenterPanelProps) 
     [setViewport]
   );
 
-  const nodeTypes: NodeTypes = useMemo(
-    () => ({
-      process: ProcessNode,
-      decision: DecisionNode,
-      start: StartNode,
-      end: EndNode,
-      note: NoteNode,
-    }),
-    []
-  );
+const nodeTypes: NodeTypes = useMemo(
+  () => ({
+    process: TreeNode,
+    decision: TreeNode,
+    start: TreeNode,
+    end: TreeNode,
+    note: TreeNode,
+  }),
+  []
+);
+
 
   const edgeTypes: EdgeTypes = useMemo(
     () => ({
@@ -398,6 +398,7 @@ export default function CenterPanel({ isFullscreen = false }: CenterPanelProps) 
         </>
       )}
 
+<<<<<<< HEAD
       <div
         ref={wrapperRef}
         className="relative flex-1 rounded-2xl border-2 border-slate-200 bg-white shadow-lg overflow-hidden"
@@ -493,7 +494,122 @@ export default function CenterPanel({ isFullscreen = false }: CenterPanelProps) 
             position={compactInspector.position}
           />
         )}
+=======
+{/* Canvas wrapper */}
+<div
+  ref={wrapperRef}
+  className="relative flex-1 overflow-hidden rounded-2xl border border-slate-200/70 shadow-[0_18px_50px_rgba(2,6,23,0.10)]"
+  onMouseDown={(e) => {
+    if (e.button !== 2) return;
+    rightMouseDownRef.current = true;
+    rightDraggedRef.current = false;
+    rightStartRef.current = { x: e.clientX, y: e.clientY };
+  }}
+  onMouseMove={(e) => {
+    if (!rightMouseDownRef.current || !rightStartRef.current) return;
+    const dx = Math.abs(e.clientX - rightStartRef.current.x);
+    const dy = Math.abs(e.clientY - rightStartRef.current.y);
+    if (dx + dy > 6) rightDraggedRef.current = true;
+  }}
+  onMouseUp={(e) => {
+    if (e.button !== 2) return;
+    rightMouseDownRef.current = false;
+    rightStartRef.current = null;
+
+    window.setTimeout(() => {
+      rightDraggedRef.current = false;
+    }, 0);
+  }}
+  onMouseLeave={() => {
+    rightMouseDownRef.current = false;
+    rightStartRef.current = null;
+    rightDraggedRef.current = false;
+  }}
+  onContextMenu={(e) => e.preventDefault()}
+>
+  {/* Premium canvas background layer */}
+  <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_20%_10%,rgba(56,189,248,0.18),transparent_45%),radial-gradient(circle_at_90%_30%,rgba(99,102,241,0.14),transparent_45%),radial-gradient(circle_at_50%_90%,rgba(34,211,238,0.12),transparent_50%)]" />
+  <div className="pointer-events-none absolute inset-0 opacity-[0.22]">
+    <div className="h-full w-full bg-[radial-gradient(circle_at_1px_1px,rgba(15,23,42,0.10)_1px,transparent_0)] [background-size:20px_20px]" />
+  </div>
+  <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-white/55 via-white/35 to-white/55" />
+  <div className="pointer-events-none absolute inset-0 [box-shadow:inset_0_0_0_1px_rgba(255,255,255,0.55)] rounded-2xl" />
+
+  <ReactFlow
+    nodes={nodes}
+    edges={edges}
+    onNodeClick={handleNodeClick}
+    onPaneClick={handlePaneClick}
+    onPaneContextMenu={handlePaneContextMenu}
+    onConnect={onConnect}
+    onNodesChange={onNodesChange}
+    onEdgesChange={onEdgesChange}
+    onEdgeContextMenu={handleEdgeContextMenu}
+    nodeTypes={nodeTypes}
+    edgeTypes={edgeTypes}
+    fitView
+    nodesDraggable
+    nodesConnectable
+    elementsSelectable
+    selectionOnDrag={true}
+    selectNodesOnDrag={true}
+    selectionMode={SelectionMode.Partial}
+    panOnDrag={[2]}
+    minZoom={0.12}
+    maxZoom={2}
+    defaultViewport={viewport}
+    onMoveEnd={handleMoveEnd}
+    className="tf-flow"
+    proOptions={{ hideAttribution: true }}
+  >
+    {/* Lighter, premium grid */}
+    <Background gap={18} size={1} color="rgba(15,23,42,0.08)" />
+
+    {/* Bottom-right floating cluster */}
+    <div className="absolute bottom-4 right-4 z-20 flex flex-col items-end gap-3">
+      <div className="tf-glass rounded-2xl p-2">
+        <Controls className="!static !border-0 !bg-transparent !shadow-none" />
+>>>>>>> 9225038 (refactor nodes into single TreeNode and fix icon picker interaction)
       </div>
+
+      <div className="tf-glass overflow-hidden rounded-2xl">
+        <MiniMap
+          className="!static !w-44 !h-28"
+          nodeColor={(node) => {
+            const color = node.data?.color as string;
+            return color && /^#[0-9A-F]{6}$/i.test(color) ? color : "#94A3B8";
+          }}
+        />
+      </div>
+    </div>
+  </ReactFlow>
+
+  <CanvasMenus
+    contextMenu={contextMenu}
+    edgeMenu={edgeMenu}
+    onAddNode={handleAddNode}
+    edges={edges}
+    onEditEdgeLabel={(edgeId, nextLabel) => updateEdgeLabel(edgeId, nextLabel)}
+    onDeleteEdge={(edgeId) => deleteEdge(edgeId)}
+    onCloseEdgeMenu={() =>
+      setEdgeMenu({ isOpen: false, edgeId: null, position: { x: 0, y: 0 } })
+    }
+  />
+
+  {compactInspector.isOpen && inspectorNode && (
+    <NodeInspector
+      node={inspectorNode}
+      onClose={() =>
+        setCompactInspector({
+          isOpen: false,
+          nodeId: null,
+          position: { x: 0, y: 0 },
+        })
+      }
+      position={compactInspector.position}
+    />
+  )}
+</div>
 
       <ConnectionTypeModal
         isOpen={!!pendingConnection}

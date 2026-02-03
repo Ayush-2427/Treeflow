@@ -25,3 +25,72 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+/* ===== Premium dark scrollbar ===== */
+
+/* Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+}
+
+/* Chrome, Edge, Safari */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.18),
+    rgba(255, 255, 255, 0.08)
+  );
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.28),
+    rgba(255, 255, 255, 0.14)
+  );
+}
+
+/* Shared glass surface used in the canvas floating UI */
+.tf-glass {
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 18px 45px rgba(2, 6, 23, 0.12);
+}
+
+/* Make ReactFlow selection rectangle softer */
+.tf-flow .react-flow__selection {
+  background: rgba(56, 189, 248, 0.10) !important;
+  border: 1px solid rgba(56, 189, 248, 0.35) !important;
+  border-radius: 12px;
+}
+
+/* Make edges and handles feel less harsh */
+.tf-flow .react-flow__handle {
+  width: 10px;
+  height: 10px;
+  border: 2px solid rgba(255, 255, 255, 0.85);
+  box-shadow: 0 8px 18px rgba(2, 6, 23, 0.12);
+}
+
+/* Controls buttons look more product-like */
+.tf-flow .react-flow__controls-button {
+  border-radius: 12px !important;
+  background: transparent !important;
+  border: 0 !important;
+}
+
+.tf-flow .react-flow__controls-button:hover {
+  background: rgba(15, 23, 42, 0.06) !important;
+}
