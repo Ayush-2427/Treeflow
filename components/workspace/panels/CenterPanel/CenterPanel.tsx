@@ -1,4 +1,3 @@
-// components/workspace/panels/CenterPanel/CenterPanel.tsx
 "use client";
 
 import { useState, useCallback, useMemo, useRef, useEffect } from "react";
@@ -185,8 +184,8 @@ export default function CenterPanel({ isFullscreen = false }: CenterPanelProps) 
       event.stopPropagation();
 
       if (rightDraggedRef.current) return;
-
       if (!wrapperRef.current) return;
+
       const rect = wrapperRef.current.getBoundingClientRect();
 
       let menuX = event.clientX - rect.left;
@@ -200,18 +199,12 @@ export default function CenterPanel({ isFullscreen = false }: CenterPanelProps) 
       if (menuX < 10) menuX = 10;
       if (menuY < 10) menuY = 10;
 
-      const flowPos = screenToFlowPosition({
-        x: event.clientX,
-        y: event.clientY,
-      });
+      const flowPos = screenToFlowPosition({ x: event.clientX, y: event.clientY });
 
       setEdgeMenu({ isOpen: false, edgeId: null, position: { x: 0, y: 0 } });
-      setCompactInspector({
-        isOpen: false,
-        nodeId: null,
-        position: { x: 0, y: 0 },
-      });
+      setCompactInspector({ isOpen: false, nodeId: null, position: { x: 0, y: 0 } });
       setShowControls(false);
+
       setContextMenu({
         isOpen: true,
         position: { x: menuX, y: menuY },
@@ -278,22 +271,11 @@ export default function CenterPanel({ isFullscreen = false }: CenterPanelProps) 
     if (menuX < 10) menuX = 10;
     if (menuY < 10) menuY = 10;
 
-    setContextMenu({
-      isOpen: false,
-      position: { x: 0, y: 0 },
-      flowPosition: { x: 0, y: 0 },
-    });
-    setCompactInspector({
-      isOpen: false,
-      nodeId: null,
-      position: { x: 0, y: 0 },
-    });
+    setContextMenu({ isOpen: false, position: { x: 0, y: 0 }, flowPosition: { x: 0, y: 0 } });
+    setCompactInspector({ isOpen: false, nodeId: null, position: { x: 0, y: 0 } });
     setShowControls(false);
-    setEdgeMenu({
-      isOpen: true,
-      edgeId: edge.id,
-      position: { x: menuX, y: menuY },
-    });
+
+    setEdgeMenu({ isOpen: true, edgeId: edge.id, position: { x: menuX, y: menuY } });
   }, []);
 
   const handleNodeClick = useCallback(
@@ -302,11 +284,7 @@ export default function CenterPanel({ isFullscreen = false }: CenterPanelProps) 
 
       selectNode(node.id);
 
-      setContextMenu({
-        isOpen: false,
-        position: { x: 0, y: 0 },
-        flowPosition: { x: 0, y: 0 },
-      });
+      setContextMenu({ isOpen: false, position: { x: 0, y: 0 }, flowPosition: { x: 0, y: 0 } });
       setEdgeMenu({ isOpen: false, edgeId: null, position: { x: 0, y: 0 } });
       setShowControls(false);
 
@@ -320,18 +298,12 @@ export default function CenterPanel({ isFullscreen = false }: CenterPanelProps) 
         const inspectorWidth = 280;
         const inspectorHeight = 300;
 
-        if (inspectorX + inspectorWidth > rect.width)
-          inspectorX = rect.width - inspectorWidth - 10;
-        if (inspectorY + inspectorHeight > rect.height)
-          inspectorY = rect.height - inspectorHeight - 10;
+        if (inspectorX + inspectorWidth > rect.width) inspectorX = rect.width - inspectorWidth - 10;
+        if (inspectorY + inspectorHeight > rect.height) inspectorY = rect.height - inspectorHeight - 10;
         if (inspectorX < 10) inspectorX = 10;
         if (inspectorY < 10) inspectorY = 10;
 
-        setCompactInspector({
-          isOpen: true,
-          nodeId: node.id,
-          position: { x: inspectorX, y: inspectorY },
-        });
+        setCompactInspector({ isOpen: true, nodeId: node.id, position: { x: inspectorX, y: inspectorY } });
       }
     },
     [selectNode, isFullscreen]
@@ -346,9 +318,6 @@ export default function CenterPanel({ isFullscreen = false }: CenterPanelProps) 
     window.open("/workspace/fullscreen", "_blank", "noopener,noreferrer");
   }, []);
 
-  const sourceNode = nodes.find((n) => n.id === pendingConnection?.source);
-  const inspectorNode = nodes.find((n) => n.id === compactInspector.nodeId);
-
   const openInfo = useCallback(() => {
     const btn = infoBtnRef.current;
     if (!btn) {
@@ -360,11 +329,9 @@ export default function CenterPanel({ isFullscreen = false }: CenterPanelProps) 
     const width = 320;
     const gap = 10;
 
-    // Default: open under the button, aligned to its right edge.
     let left = rect.right - width;
     let top = rect.bottom + gap;
 
-    // Keep inside viewport
     const maxLeft = window.innerWidth - width - 12;
     if (left > maxLeft) left = maxLeft;
     if (left < 12) left = 12;
@@ -376,25 +343,23 @@ export default function CenterPanel({ isFullscreen = false }: CenterPanelProps) 
     setShowControls(true);
   }, []);
 
+  const sourceNode = nodes.find((n) => n.id === pendingConnection?.source);
+  const inspectorNode = nodes.find((n) => n.id === compactInspector.nodeId);
+
   return (
     <div className="flex h-full flex-col">
-<TreeFlowHeader
-  isFullscreen={isFullscreen}
-  showControls={showControls}
-  setShowControls={setShowControls}
-  openInfo={openInfo}
-  onFullscreen={handleFullscreen}
-/>
+      <TreeFlowHeader
+        isFullscreen={isFullscreen}
+        showControls={showControls}
+        setShowControls={setShowControls}
+        openInfo={openInfo}
+        onFullscreen={handleFullscreen}
+      />
 
-
-
-      {/* Info popup, forced on top of everything */}
+      {/* Info popup, always on top */}
       {showControls && (
         <>
-          <div
-            className="fixed inset-0 z-[90]"
-            onClick={() => setShowControls(false)}
-          />
+          <div className="fixed inset-0 z-[90]" onClick={() => setShowControls(false)} />
           <div
             className="fixed z-[100] w-80 rounded-xl border border-slate-200 bg-white shadow-2xl p-4"
             style={{ top: infoPos.top, left: infoPos.left }}
@@ -433,7 +398,6 @@ export default function CenterPanel({ isFullscreen = false }: CenterPanelProps) 
         </>
       )}
 
-      {/* Canvas wrapper */}
       <div
         ref={wrapperRef}
         className="relative flex-1 rounded-2xl border-2 border-slate-200 bg-white shadow-lg overflow-hidden"
@@ -453,7 +417,6 @@ export default function CenterPanel({ isFullscreen = false }: CenterPanelProps) 
           if (e.button !== 2) return;
           rightMouseDownRef.current = false;
           rightStartRef.current = null;
-
           window.setTimeout(() => {
             rightDraggedRef.current = false;
           }, 0);
@@ -494,21 +457,19 @@ export default function CenterPanel({ isFullscreen = false }: CenterPanelProps) 
         >
           <Background gap={16} size={1} color="#e2e8f0" />
 
-          {/* Bottom-right cluster: Controls next to smaller MiniMap */}
-          <div className="absolute top-4 right-4 z-20">
-            <Controls className="!static !border-slate-200 !bg-white/90 !backdrop-blur-sm !shadow-lg !rounded-xl" />
-          </div>
+          <Controls
+            position="top-right"
+            className="!border-slate-200 !bg-white/90 !backdrop-blur-sm !shadow-lg !rounded-xl"
+          />
 
-          {/* MiniMap: bottom-right */}
-          <div className="absolute bottom-4 right-4 z-20 overflow-hidden rounded-xl border border-slate-200 bg-white/90 backdrop-blur-sm shadow-lg">
-            <MiniMap
-              className="!static !w-40 !h-28"
-              nodeColor={(node) => {
-                const color = node.data?.color as string;
-                return color && /^#[0-9A-F]{6}$/i.test(color) ? color : "#64748B";
-              }}
-            />
-          </div>
+          <MiniMap
+            position="bottom-right"
+            className="!border-slate-200 !bg-white/90 !backdrop-blur-sm !shadow-lg !rounded-xl !w-40 !h-28"
+            nodeColor={(node) => {
+              const color = node.data?.color as string;
+              return color && /^#[0-9A-F]{6}$/i.test(color) ? color : "#64748B";
+            }}
+          />
         </ReactFlow>
 
         <CanvasMenus
@@ -527,11 +488,7 @@ export default function CenterPanel({ isFullscreen = false }: CenterPanelProps) 
           <NodeInspector
             node={inspectorNode}
             onClose={() =>
-              setCompactInspector({
-                isOpen: false,
-                nodeId: null,
-                position: { x: 0, y: 0 },
-              })
+              setCompactInspector({ isOpen: false, nodeId: null, position: { x: 0, y: 0 } })
             }
             position={compactInspector.position}
           />
