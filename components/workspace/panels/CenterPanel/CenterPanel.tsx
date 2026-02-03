@@ -1,3 +1,4 @@
+// components/workspace/panels/CenterPanel/CenterPanel.tsx
 "use client";
 
 import { useState, useCallback, useMemo, useRef, useEffect } from "react";
@@ -24,6 +25,7 @@ import ConnectionTypeModal from "./ConnectionTypeModal";
 import NodeInspector from "./Nodeinspector";
 import CustomEdge from "./CustomEdge";
 import CanvasMenus from "./CanvasMenus";
+import TreeFlowHeader from "./TreeFlowHeader";
 
 import type { ConnectionType, NodeType } from "../../../../lib/tree/types";
 
@@ -37,6 +39,13 @@ export default function CenterPanel({ isFullscreen = false }: CenterPanelProps) 
   const treeId = "default";
 
   const wrapperRef = useRef<HTMLDivElement>(null);
+  const infoBtnRef = useRef<HTMLButtonElement>(null);
+
+  const [showControls, setShowControls] = useState(false);
+  const [infoPos, setInfoPos] = useState<{ top: number; left: number }>({
+    top: 0,
+    left: 0,
+  });
 
   // Track right drag to avoid opening Add Node menu after panning
   const rightMouseDownRef = useRef(false);
@@ -139,6 +148,7 @@ export default function CenterPanel({ isFullscreen = false }: CenterPanelProps) 
       nodeId: null,
       position: { x: 0, y: 0 },
     });
+    setShowControls(false);
   }, []);
 
   useEffect(() => {
@@ -201,6 +211,7 @@ export default function CenterPanel({ isFullscreen = false }: CenterPanelProps) 
         nodeId: null,
         position: { x: 0, y: 0 },
       });
+      setShowControls(false);
       setContextMenu({
         isOpen: true,
         position: { x: menuX, y: menuY },
@@ -277,6 +288,7 @@ export default function CenterPanel({ isFullscreen = false }: CenterPanelProps) 
       nodeId: null,
       position: { x: 0, y: 0 },
     });
+    setShowControls(false);
     setEdgeMenu({
       isOpen: true,
       edgeId: edge.id,
@@ -296,6 +308,7 @@ export default function CenterPanel({ isFullscreen = false }: CenterPanelProps) 
         flowPosition: { x: 0, y: 0 },
       });
       setEdgeMenu({ isOpen: false, edgeId: null, position: { x: 0, y: 0 } });
+      setShowControls(false);
 
       if (isFullscreen || window.innerWidth < 1024) {
         if (!wrapperRef.current) return;
@@ -336,48 +349,91 @@ export default function CenterPanel({ isFullscreen = false }: CenterPanelProps) 
   const sourceNode = nodes.find((n) => n.id === pendingConnection?.source);
   const inspectorNode = nodes.find((n) => n.id === compactInspector.nodeId);
 
+  const openInfo = useCallback(() => {
+    const btn = infoBtnRef.current;
+    if (!btn) {
+      setShowControls((v) => !v);
+      return;
+    }
+
+    const rect = btn.getBoundingClientRect();
+    const width = 320;
+    const gap = 10;
+
+    // Default: open under the button, aligned to its right edge.
+    let left = rect.right - width;
+    let top = rect.bottom + gap;
+
+    // Keep inside viewport
+    const maxLeft = window.innerWidth - width - 12;
+    if (left > maxLeft) left = maxLeft;
+    if (left < 12) left = 12;
+
+    const maxTop = window.innerHeight - 12;
+    if (top > maxTop) top = maxTop;
+
+    setInfoPos({ top, left });
+    setShowControls(true);
+  }, []);
+
   return (
     <div className="flex h-full flex-col">
-      <div
-        className={`${isFullscreen ? "mb-2" : "mb-4"} flex items-center justify-between rounded-2xl border border-slate-200 bg-white/80 backdrop-blur-sm p-4 shadow-sm`}
-      >
-        <div>
-          <h2 className="text-base font-semibold text-slate-900">TreeFlow Canvas</h2>
-          <p className="mt-0.5 text-xs text-slate-500">
-            Design and visualize your workflows
-          </p>
-        </div>
+<TreeFlowHeader
+  isFullscreen={isFullscreen}
+  showControls={showControls}
+  setShowControls={setShowControls}
+  openInfo={openInfo}
+  onFullscreen={handleFullscreen}
+/>
 
-        <div className="flex items-center gap-2.5">
-          {!isFullscreen && (
-            <button
-              onClick={handleFullscreen}
-              className="group rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-all duration-200 shadow-sm hover:shadow"
-              type="button"
-            >
-              <span className="inline-block group-hover:scale-110 transition-transform">
-                ⛶
-              </span>{" "}
-              Fullscreen
-            </button>
-          )}
 
-          <button
-            className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-all duration-200 shadow-sm hover:shadow"
-            type="button"
+
+      {/* Info popup, forced on top of everything */}
+      {showControls && (
+        <>
+          <div
+            className="fixed inset-0 z-[90]"
+            onClick={() => setShowControls(false)}
+          />
+          <div
+            className="fixed z-[100] w-80 rounded-xl border border-slate-200 bg-white shadow-2xl p-4"
+            style={{ top: infoPos.top, left: infoPos.left }}
           >
-            Auto Layout
-          </button>
+            <div className="space-y-3 text-xs text-slate-600">
+              <div>
+                <p className="font-semibold text-slate-900 mb-2 flex items-center gap-2">
+                  <span className="w-5 h-5 rounded-md bg-blue-100 text-blue-600 flex items-center justify-center text-[10px]">
+                    🖱️
+                  </span>
+                  Canvas Controls
+                </p>
+                <ul className="space-y-1.5 pl-7">
+                  <li>• Left drag empty space to select multiple nodes</li>
+                  <li>• Right drag to pan around the canvas</li>
+                  <li>• Right click empty space to add new nodes</li>
+                  <li>• Delete/Backspace to remove selected nodes</li>
+                </ul>
+              </div>
 
-          <button
-            className="rounded-xl bg-gradient-to-br from-slate-900 to-slate-800 px-4 py-2 text-xs font-medium text-white hover:from-slate-800 hover:to-slate-700 active:scale-95 transition-all duration-150 shadow-md hover:shadow-lg"
-            type="button"
-          >
-            Export
-          </button>
-        </div>
-      </div>
+              <div className="pt-2 border-t border-slate-100">
+                <p className="font-semibold text-slate-900 mb-2 flex items-center gap-2">
+                  <span className="w-5 h-5 rounded-md bg-emerald-100 text-emerald-600 flex items-center justify-center text-[10px]">
+                    🔗
+                  </span>
+                  Connections
+                </p>
+                <ul className="space-y-1.5 pl-7">
+                  <li>• Drag from node handles to create connections</li>
+                  <li>• Double-click edge labels to edit them</li>
+                  <li>• Right-click edges for more options</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
 
+      {/* Canvas wrapper */}
       <div
         ref={wrapperRef}
         className="relative flex-1 rounded-2xl border-2 border-slate-200 bg-white shadow-lg overflow-hidden"
@@ -437,14 +493,22 @@ export default function CenterPanel({ isFullscreen = false }: CenterPanelProps) 
           onMoveEnd={handleMoveEnd}
         >
           <Background gap={16} size={1} color="#e2e8f0" />
-          <Controls className="!border-slate-200 !bg-white/90 !backdrop-blur-sm !shadow-lg !rounded-xl" />
-          <MiniMap
-            className="!border-slate-200 !bg-white/90 !backdrop-blur-sm !shadow-lg !rounded-xl"
-            nodeColor={(node) => {
-              const color = node.data?.color as string;
-              return color && /^#[0-9A-F]{6}$/i.test(color) ? color : "#64748B";
-            }}
-          />
+
+          {/* Bottom-right cluster: Controls next to smaller MiniMap */}
+          <div className="absolute top-4 right-4 z-20">
+            <Controls className="!static !border-slate-200 !bg-white/90 !backdrop-blur-sm !shadow-lg !rounded-xl" />
+          </div>
+
+          {/* MiniMap: bottom-right */}
+          <div className="absolute bottom-4 right-4 z-20 overflow-hidden rounded-xl border border-slate-200 bg-white/90 backdrop-blur-sm shadow-lg">
+            <MiniMap
+              className="!static !w-40 !h-28"
+              nodeColor={(node) => {
+                const color = node.data?.color as string;
+                return color && /^#[0-9A-F]{6}$/i.test(color) ? color : "#64748B";
+              }}
+            />
+          </div>
         </ReactFlow>
 
         <CanvasMenus
@@ -473,37 +537,6 @@ export default function CenterPanel({ isFullscreen = false }: CenterPanelProps) 
           />
         )}
       </div>
-
-      {!isFullscreen && (
-        <div className="mt-4 rounded-2xl border border-slate-200 bg-gradient-to-br from-white to-slate-50 p-4 shadow-sm">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 text-xs text-slate-600">
-            <div className="space-y-2">
-              <p className="font-semibold text-slate-900 flex items-center gap-2">
-                <span className="w-5 h-5 rounded-md bg-blue-100 text-blue-600 flex items-center justify-center text-[10px]">
-                  🖱️
-                </span>
-                Canvas Controls
-              </p>
-              <p className="pl-7">• Left drag empty space to select multiple nodes</p>
-              <p className="pl-7">• Right drag to pan around the canvas</p>
-              <p className="pl-7">• Right click empty space to add new nodes</p>
-              <p className="pl-7">• Delete/Backspace to remove selected nodes</p>
-            </div>
-
-            <div className="space-y-2">
-              <p className="font-semibold text-slate-900 flex items-center gap-2">
-                <span className="w-5 h-5 rounded-md bg-emerald-100 text-emerald-600 flex items-center justify-center text-[10px]">
-                  🔗
-                </span>
-                Connections
-              </p>
-              <p className="pl-7">• Drag from node handles to create connections</p>
-              <p className="pl-7">• Double-click edge labels to edit them</p>
-              <p className="pl-7">• Right-click edges for more options</p>
-            </div>
-          </div>
-        </div>
-      )}
 
       <ConnectionTypeModal
         isOpen={!!pendingConnection}

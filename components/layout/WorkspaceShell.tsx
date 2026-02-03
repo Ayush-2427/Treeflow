@@ -1,39 +1,62 @@
-// components/layout/WorkspaceShell.tsx
 "use client";
 
-import { ReactNode } from "react";
+import { ReactNode, useState } from "react";
+import { Menu } from "lucide-react";
+import LeftSidebar from "../workspace/panels/LeftPanel/LeftPanel";
 
 interface WorkspaceShellProps {
-  left: ReactNode;
-  center: ReactNode;
-  right: ReactNode;
+  left: ReactNode;   // Properties panel (overlay)
+  center: ReactNode; // Canvas
+  right: ReactNode;  // AI chat (docked)
 }
 
-export default function WorkspaceShell({ left, center, right }: WorkspaceShellProps) {
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-slate-50 to-slate-100">
-      {/* Subtle texture overlay */}
-      <div className="fixed inset-0 opacity-[0.015] pointer-events-none" 
-           style={{ backgroundImage: 'url("data:image/svg+xml,%3Csvg width="60" height="60" xmlns="http://www.w3.org/2000/svg"%3E%3Cpath d="M0 0h60v60H0z" fill="none"/%3E%3Cpath d="M30 30m-1 0a1 1 0 1 0 2 0 1 1 0 1 0-2 0" fill="%23000"/%3E%3C/svg%3E")' }}
-      />
-      
-      <div className="relative flex h-screen">
-        {/* Left Panel - Node Inspector */}
-        <aside className="hidden lg:flex w-72 xl:w-80 flex-col border-r border-slate-200/80 bg-white/60 backdrop-blur-sm">
-          <div className="flex-1 overflow-y-auto p-5">
-            {left}
-          </div>
-        </aside>
+export default function WorkspaceShell({
+  left,
+  center,
+  right,
+}: WorkspaceShellProps) {
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [propertiesOpen, setPropertiesOpen] = useState(false);
 
-        {/* Center Panel - Canvas (Main Workspace) */}
-        <main className="flex-1 flex flex-col overflow-hidden">
-          <div className="flex-1 p-4 lg:p-6">
-            {center}
-          </div>
+  return (
+    <div className="h-screen w-full bg-gradient-to-br from-slate-50 to-slate-100 overflow-hidden">
+      {/* Left Sidebar Overlay */}
+      <LeftSidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+
+      {/* Properties Panel Overlay */}
+      {propertiesOpen && (
+        <>
+          <div
+            className="fixed inset-0 z-30 bg-black/10 backdrop-blur-[2px]"
+            onClick={() => setPropertiesOpen(false)}
+          />
+          <aside className="fixed top-0 right-0 z-40 h-full w-80 bg-white shadow-xl border-l">
+            <div className="h-full overflow-y-auto p-5">
+              {left}
+            </div>
+          </aside>
+        </>
+      )}
+
+      {/* Sidebar toggle */}
+      {!sidebarOpen && (
+        <button
+          onClick={() => setSidebarOpen(true)}
+          className="fixed top-4 left-4 z-40 rounded-lg bg-slate-900 p-2 text-white shadow"
+        >
+          <Menu className="h-5 w-5" />
+        </button>
+      )}
+
+
+
+      {/* Main layout: Center + AI */}
+      <div className="h-full w-full grid grid-cols-[1fr_360px]">
+        <main className="min-w-0 overflow-hidden">
+          {center}
         </main>
 
-        {/* Right Panel - AI Chat */}
-        <aside className="hidden xl:flex w-80 2xl:w-96 flex-col border-l border-slate-200/80 bg-white/60 backdrop-blur-sm">
+        <aside className="hidden xl:flex flex-col border-l bg-white/60 backdrop-blur-sm">
           <div className="flex-1 overflow-y-auto p-5">
             {right}
           </div>
