@@ -398,103 +398,6 @@ const nodeTypes: NodeTypes = useMemo(
         </>
       )}
 
-<<<<<<< HEAD
-      <div
-        ref={wrapperRef}
-        className="relative flex-1 rounded-2xl border-2 border-slate-200 bg-white shadow-lg overflow-hidden"
-        onMouseDown={(e) => {
-          if (e.button !== 2) return;
-          rightMouseDownRef.current = true;
-          rightDraggedRef.current = false;
-          rightStartRef.current = { x: e.clientX, y: e.clientY };
-        }}
-        onMouseMove={(e) => {
-          if (!rightMouseDownRef.current || !rightStartRef.current) return;
-          const dx = Math.abs(e.clientX - rightStartRef.current.x);
-          const dy = Math.abs(e.clientY - rightStartRef.current.y);
-          if (dx + dy > 6) rightDraggedRef.current = true;
-        }}
-        onMouseUp={(e) => {
-          if (e.button !== 2) return;
-          rightMouseDownRef.current = false;
-          rightStartRef.current = null;
-          window.setTimeout(() => {
-            rightDraggedRef.current = false;
-          }, 0);
-        }}
-        onMouseLeave={() => {
-          rightMouseDownRef.current = false;
-          rightStartRef.current = null;
-          rightDraggedRef.current = false;
-        }}
-        onContextMenu={(e) => {
-          e.preventDefault();
-        }}
-      >
-        <ReactFlow
-          nodes={nodes}
-          edges={edges}
-          onNodeClick={handleNodeClick}
-          onPaneClick={handlePaneClick}
-          onPaneContextMenu={handlePaneContextMenu}
-          onConnect={onConnect}
-          onNodesChange={onNodesChange}
-          onEdgesChange={onEdgesChange}
-          onEdgeContextMenu={handleEdgeContextMenu}
-          nodeTypes={nodeTypes}
-          edgeTypes={edgeTypes}
-          fitView
-          nodesDraggable
-          nodesConnectable
-          elementsSelectable
-          selectionOnDrag={true}
-          selectNodesOnDrag={true}
-          selectionMode={SelectionMode.Partial}
-          panOnDrag={[2]}
-          minZoom={0.12}
-          maxZoom={2}
-          defaultViewport={viewport}
-          onMoveEnd={handleMoveEnd}
-        >
-          <Background gap={16} size={1} color="#e2e8f0" />
-
-          <Controls
-            position="top-right"
-            className="!border-slate-200 !bg-white/90 !backdrop-blur-sm !shadow-lg !rounded-xl"
-          />
-
-          <MiniMap
-            position="bottom-right"
-            className="!border-slate-200 !bg-white/90 !backdrop-blur-sm !shadow-lg !rounded-xl !w-40 !h-28"
-            nodeColor={(node) => {
-              const color = node.data?.color as string;
-              return color && /^#[0-9A-F]{6}$/i.test(color) ? color : "#64748B";
-            }}
-          />
-        </ReactFlow>
-
-        <CanvasMenus
-          contextMenu={contextMenu}
-          edgeMenu={edgeMenu}
-          onAddNode={handleAddNode}
-          edges={edges}
-          onEditEdgeLabel={(edgeId, nextLabel) => updateEdgeLabel(edgeId, nextLabel)}
-          onDeleteEdge={(edgeId) => deleteEdge(edgeId)}
-          onCloseEdgeMenu={() =>
-            setEdgeMenu({ isOpen: false, edgeId: null, position: { x: 0, y: 0 } })
-          }
-        />
-
-        {compactInspector.isOpen && inspectorNode && (
-          <NodeInspector
-            node={inspectorNode}
-            onClose={() =>
-              setCompactInspector({ isOpen: false, nodeId: null, position: { x: 0, y: 0 } })
-            }
-            position={compactInspector.position}
-          />
-        )}
-=======
 {/* Canvas wrapper */}
 <div
   ref={wrapperRef}
@@ -569,7 +472,6 @@ const nodeTypes: NodeTypes = useMemo(
     <div className="absolute bottom-4 right-4 z-20 flex flex-col items-end gap-3">
       <div className="tf-glass rounded-2xl p-2">
         <Controls className="!static !border-0 !bg-transparent !shadow-none" />
->>>>>>> 9225038 (refactor nodes into single TreeNode and fix icon picker interaction)
       </div>
 
       <div className="tf-glass overflow-hidden rounded-2xl">
@@ -610,6 +512,7 @@ const nodeTypes: NodeTypes = useMemo(
     />
   )}
 </div>
+
 
       <ConnectionTypeModal
         isOpen={!!pendingConnection}
