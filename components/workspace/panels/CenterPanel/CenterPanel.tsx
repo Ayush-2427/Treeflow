@@ -15,7 +15,7 @@ import ReactFlow, {
 
 import { useTreeStore } from "../../../../lib/tree/store";
 import { useAutoSave } from "../../../../lib/tree/hooks/useAutoSave";
-
+import { useActiveTreeId } from "../../../../lib/tree/canvas/useActiveTreeId";
 
 import ConnectionTypeModal from "./ConnectionTypeModal";
 import NodeInspector from "./Nodeinspector";
@@ -23,7 +23,6 @@ import CustomEdge from "./CustomEdge";
 import CanvasMenus from "./CanvasMenus";
 import TreeFlowHeader from "./TreeFlowHeader";
 import TreeNode from "../../nodes/TreeNode";
-
 
 import type { ConnectionType, NodeType } from "../../../../lib/tree/types";
 
@@ -34,7 +33,7 @@ interface CenterPanelProps {
 }
 
 export default function CenterPanel({ isFullscreen = false }: CenterPanelProps) {
-  const treeId = "default";
+  const treeId = useActiveTreeId();
 
   const wrapperRef = useRef<HTMLDivElement>(null);
   const infoBtnRef = useRef<HTMLButtonElement>(null);
@@ -80,12 +79,17 @@ export default function CenterPanel({ isFullscreen = false }: CenterPanelProps) 
     position: { x: 0, y: 0 },
   });
 
+  // =========================
+  // Store selectors
+  // =========================
   const nodes = useTreeStore((s) => s.nodes);
   const edges = useTreeStore((s) => s.edges);
 
   const viewport = useTreeStore((s) => s.viewport);
   const setViewport = useTreeStore((s) => s.setViewport);
+
   const loadTree = useTreeStore((s) => s.loadTree);
+  const resetTree = useTreeStore((s) => s.resetTree);
 
   const selectNode = useTreeStore((s) => s.selectNode);
   const addNodeAtPosition = useTreeStore((s) => s.addNodeAtPosition);
@@ -103,30 +107,47 @@ export default function CenterPanel({ isFullscreen = false }: CenterPanelProps) 
 
   const { screenToFlowPosition, getNodes } = useReactFlow();
 
+  // =========================
+  // Load the active tree
+  // - If no persisted state exists for this treeId, start fresh
+  // =========================
   useEffect(() => {
-    loadTree(treeId);
-  }, [loadTree, treeId]);
+    let cancelled = false;
 
+    (async () => {
+      const found = await loadTree(treeId);
+      if (cancelled) return;
+
+      if (!found) {
+        await resetTree(treeId);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [loadTree, resetTree, treeId]);
+
+  // Debounced autosave for active tree
   useAutoSave(treeId, 600);
 
   const handleMoveEnd = useCallback(
-    (_: any, vp: Viewport) => {
+    (_: unknown, vp: Viewport) => {
       setViewport(vp);
     },
     [setViewport]
   );
 
-const nodeTypes: NodeTypes = useMemo(
-  () => ({
-    process: TreeNode,
-    decision: TreeNode,
-    start: TreeNode,
-    end: TreeNode,
-    note: TreeNode,
-  }),
-  []
-);
-
+  const nodeTypes: NodeTypes = useMemo(
+    () => ({
+      process: TreeNode,
+      decision: TreeNode,
+      start: TreeNode,
+      end: TreeNode,
+      note: TreeNode,
+    }),
+    []
+  );
 
   const edgeTypes: EdgeTypes = useMemo(
     () => ({
@@ -150,6 +171,7 @@ const nodeTypes: NodeTypes = useMemo(
     setShowControls(false);
   }, []);
 
+  // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement;
@@ -199,10 +221,17 @@ const nodeTypes: NodeTypes = useMemo(
       if (menuX < 10) menuX = 10;
       if (menuY < 10) menuY = 10;
 
-      const flowPos = screenToFlowPosition({ x: event.clientX, y: event.clientY });
+      const flowPos = screenToFlowPosition({
+        x: event.clientX,
+        y: event.clientY,
+      });
 
       setEdgeMenu({ isOpen: false, edgeId: null, position: { x: 0, y: 0 } });
-      setCompactInspector({ isOpen: false, nodeId: null, position: { x: 0, y: 0 } });
+      setCompactInspector({
+        isOpen: false,
+        nodeId: null,
+        position: { x: 0, y: 0 },
+      });
       setShowControls(false);
 
       setContextMenu({
@@ -235,7 +264,10 @@ const nodeTypes: NodeTypes = useMemo(
   const onConnect = useCallback(
     (connection: Connection) => {
       if (connection.source && connection.target) {
-        setPendingConnection({ source: connection.source, target: connection.target });
+        setPendingConnection({
+          source: connection.source,
+          target: connection.target,
+        });
       }
     },
     [setPendingConnection]
@@ -271,8 +303,16 @@ const nodeTypes: NodeTypes = useMemo(
     if (menuX < 10) menuX = 10;
     if (menuY < 10) menuY = 10;
 
-    setContextMenu({ isOpen: false, position: { x: 0, y: 0 }, flowPosition: { x: 0, y: 0 } });
-    setCompactInspector({ isOpen: false, nodeId: null, position: { x: 0, y: 0 } });
+    setContextMenu({
+      isOpen: false,
+      position: { x: 0, y: 0 },
+      flowPosition: { x: 0, y: 0 },
+    });
+    setCompactInspector({
+      isOpen: false,
+      nodeId: null,
+      position: { x: 0, y: 0 },
+    });
     setShowControls(false);
 
     setEdgeMenu({ isOpen: true, edgeId: edge.id, position: { x: menuX, y: menuY } });
@@ -284,7 +324,11 @@ const nodeTypes: NodeTypes = useMemo(
 
       selectNode(node.id);
 
-      setContextMenu({ isOpen: false, position: { x: 0, y: 0 }, flowPosition: { x: 0, y: 0 } });
+      setContextMenu({
+        isOpen: false,
+        position: { x: 0, y: 0 },
+        flowPosition: { x: 0, y: 0 },
+      });
       setEdgeMenu({ isOpen: false, edgeId: null, position: { x: 0, y: 0 } });
       setShowControls(false);
 
@@ -298,12 +342,18 @@ const nodeTypes: NodeTypes = useMemo(
         const inspectorWidth = 280;
         const inspectorHeight = 300;
 
-        if (inspectorX + inspectorWidth > rect.width) inspectorX = rect.width - inspectorWidth - 10;
-        if (inspectorY + inspectorHeight > rect.height) inspectorY = rect.height - inspectorHeight - 10;
+        if (inspectorX + inspectorWidth > rect.width)
+          inspectorX = rect.width - inspectorWidth - 10;
+        if (inspectorY + inspectorHeight > rect.height)
+          inspectorY = rect.height - inspectorHeight - 10;
         if (inspectorX < 10) inspectorX = 10;
         if (inspectorY < 10) inspectorY = 10;
 
-        setCompactInspector({ isOpen: true, nodeId: node.id, position: { x: inspectorX, y: inspectorY } });
+        setCompactInspector({
+          isOpen: true,
+          nodeId: node.id,
+          position: { x: inspectorX, y: inspectorY },
+        });
       }
     },
     [selectNode, isFullscreen]
@@ -359,7 +409,10 @@ const nodeTypes: NodeTypes = useMemo(
       {/* Info popup, always on top */}
       {showControls && (
         <>
-          <div className="fixed inset-0 z-[90]" onClick={() => setShowControls(false)} />
+          <div
+            className="fixed inset-0 z-[90]"
+            onClick={() => setShowControls(false)}
+          />
           <div
             className="fixed z-[100] w-80 rounded-xl border border-slate-200 bg-white shadow-2xl p-4"
             style={{ top: infoPos.top, left: infoPos.left }}
@@ -398,121 +451,118 @@ const nodeTypes: NodeTypes = useMemo(
         </>
       )}
 
-{/* Canvas wrapper */}
-<div
-  ref={wrapperRef}
-  className="relative flex-1 overflow-hidden rounded-2xl border border-slate-200/70 shadow-[0_18px_50px_rgba(2,6,23,0.10)]"
-  onMouseDown={(e) => {
-    if (e.button !== 2) return;
-    rightMouseDownRef.current = true;
-    rightDraggedRef.current = false;
-    rightStartRef.current = { x: e.clientX, y: e.clientY };
-  }}
-  onMouseMove={(e) => {
-    if (!rightMouseDownRef.current || !rightStartRef.current) return;
-    const dx = Math.abs(e.clientX - rightStartRef.current.x);
-    const dy = Math.abs(e.clientY - rightStartRef.current.y);
-    if (dx + dy > 6) rightDraggedRef.current = true;
-  }}
-  onMouseUp={(e) => {
-    if (e.button !== 2) return;
-    rightMouseDownRef.current = false;
-    rightStartRef.current = null;
+      {/* Canvas wrapper */}
+      <div
+        ref={wrapperRef}
+        className="relative flex-1 overflow-hidden rounded-2xl border border-slate-200/70 shadow-[0_18px_50px_rgba(2,6,23,0.10)]"
+        onMouseDown={(e) => {
+          if (e.button !== 2) return;
+          rightMouseDownRef.current = true;
+          rightDraggedRef.current = false;
+          rightStartRef.current = { x: e.clientX, y: e.clientY };
+        }}
+        onMouseMove={(e) => {
+          if (!rightMouseDownRef.current || !rightStartRef.current) return;
+          const dx = Math.abs(e.clientX - rightStartRef.current.x);
+          const dy = Math.abs(e.clientY - rightStartRef.current.y);
+          if (dx + dy > 6) rightDraggedRef.current = true;
+        }}
+        onMouseUp={(e) => {
+          if (e.button !== 2) return;
+          rightMouseDownRef.current = false;
+          rightStartRef.current = null;
 
-    window.setTimeout(() => {
-      rightDraggedRef.current = false;
-    }, 0);
-  }}
-  onMouseLeave={() => {
-    rightMouseDownRef.current = false;
-    rightStartRef.current = null;
-    rightDraggedRef.current = false;
-  }}
-  onContextMenu={(e) => e.preventDefault()}
->
-  {/* Premium canvas background layer */}
-  <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_20%_10%,rgba(56,189,248,0.18),transparent_45%),radial-gradient(circle_at_90%_30%,rgba(99,102,241,0.14),transparent_45%),radial-gradient(circle_at_50%_90%,rgba(34,211,238,0.12),transparent_50%)]" />
-  <div className="pointer-events-none absolute inset-0 opacity-[0.22]">
-    <div className="h-full w-full bg-[radial-gradient(circle_at_1px_1px,rgba(15,23,42,0.10)_1px,transparent_0)] [background-size:20px_20px]" />
-  </div>
-  <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-white/55 via-white/35 to-white/55" />
-  <div className="pointer-events-none absolute inset-0 [box-shadow:inset_0_0_0_1px_rgba(255,255,255,0.55)] rounded-2xl" />
+          window.setTimeout(() => {
+            rightDraggedRef.current = false;
+          }, 0);
+        }}
+        onMouseLeave={() => {
+          rightMouseDownRef.current = false;
+          rightStartRef.current = null;
+          rightDraggedRef.current = false;
+        }}
+        onContextMenu={(e) => e.preventDefault()}
+      >
+        {/* Premium canvas background layer */}
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_20%_10%,rgba(56,189,248,0.18),transparent_45%),radial-gradient(circle_at_90%_30%,rgba(99,102,241,0.14),transparent_45%),radial-gradient(circle_at_50%_90%,rgba(34,211,238,0.12),transparent_50%)]" />
+        <div className="pointer-events-none absolute inset-0 opacity-[0.22]">
+          <div className="h-full w-full bg-[radial-gradient(circle_at_1px_1px,rgba(15,23,42,0.10)_1px,transparent_0)] [background-size:20px_20px]" />
+        </div>
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-white/55 via-white/35 to-white/55" />
+        <div className="pointer-events-none absolute inset-0 [box-shadow:inset_0_0_0_1px_rgba(255,255,255,0.55)] rounded-2xl" />
 
-  <ReactFlow
-    nodes={nodes}
-    edges={edges}
-    onNodeClick={handleNodeClick}
-    onPaneClick={handlePaneClick}
-    onPaneContextMenu={handlePaneContextMenu}
-    onConnect={onConnect}
-    onNodesChange={onNodesChange}
-    onEdgesChange={onEdgesChange}
-    onEdgeContextMenu={handleEdgeContextMenu}
-    nodeTypes={nodeTypes}
-    edgeTypes={edgeTypes}
-    fitView
-    nodesDraggable
-    nodesConnectable
-    elementsSelectable
-    selectionOnDrag={true}
-    selectNodesOnDrag={true}
-    selectionMode={SelectionMode.Partial}
-    panOnDrag={[2]}
-    minZoom={0.12}
-    maxZoom={2}
-    defaultViewport={viewport}
-    onMoveEnd={handleMoveEnd}
-    className="tf-flow"
-    proOptions={{ hideAttribution: true }}
-  >
-    {/* Lighter, premium grid */}
-    <Background gap={18} size={1} color="rgba(15,23,42,0.08)" />
+        <ReactFlow
+          nodes={nodes}
+          edges={edges}
+          onNodeClick={handleNodeClick}
+          onPaneClick={handlePaneClick}
+          onPaneContextMenu={handlePaneContextMenu}
+          onConnect={onConnect}
+          onNodesChange={onNodesChange}
+          onEdgesChange={onEdgesChange}
+          onEdgeContextMenu={handleEdgeContextMenu}
+          nodeTypes={nodeTypes}
+          edgeTypes={edgeTypes}
+          fitView
+          nodesDraggable
+          nodesConnectable
+          elementsSelectable
+          selectionOnDrag
+          selectNodesOnDrag
+          selectionMode={SelectionMode.Partial}
+          panOnDrag={[2]}
+          minZoom={0.12}
+          maxZoom={2}
+          defaultViewport={viewport}
+          onMoveEnd={handleMoveEnd}
+          className="tf-flow"
+          proOptions={{ hideAttribution: true }}
+        >
+          <Background gap={18} size={1} color="rgba(15,23,42,0.08)" />
 
-    {/* Bottom-right floating cluster */}
-    <div className="absolute bottom-4 right-4 z-20 flex flex-col items-end gap-3">
-      <div className="tf-glass rounded-2xl p-2">
-        <Controls className="!static !border-0 !bg-transparent !shadow-none" />
-      </div>
+          <div className="absolute bottom-4 right-4 z-20 flex flex-col items-end gap-3">
+            <div className="tf-glass rounded-2xl p-2">
+              <Controls className="!static !border-0 !bg-transparent !shadow-none" />
+            </div>
 
-      <div className="tf-glass overflow-hidden rounded-2xl">
-        <MiniMap
-          className="!static !w-44 !h-28"
-          nodeColor={(node) => {
-            const color = node.data?.color as string;
-            return color && /^#[0-9A-F]{6}$/i.test(color) ? color : "#94A3B8";
-          }}
+            <div className="tf-glass overflow-hidden rounded-2xl">
+              <MiniMap
+                className="!static !w-44 !h-28"
+                nodeColor={(node) => {
+                  const color = node.data?.color as string;
+                  return color && /^#[0-9A-F]{6}$/i.test(color) ? color : "#94A3B8";
+                }}
+              />
+            </div>
+          </div>
+        </ReactFlow>
+
+        <CanvasMenus
+          contextMenu={contextMenu}
+          edgeMenu={edgeMenu}
+          onAddNode={handleAddNode}
+          edges={edges}
+          onEditEdgeLabel={(edgeId, nextLabel) => updateEdgeLabel(edgeId, nextLabel)}
+          onDeleteEdge={(edgeId) => deleteEdge(edgeId)}
+          onCloseEdgeMenu={() =>
+            setEdgeMenu({ isOpen: false, edgeId: null, position: { x: 0, y: 0 } })
+          }
         />
+
+        {compactInspector.isOpen && inspectorNode && (
+          <NodeInspector
+            node={inspectorNode}
+            onClose={() =>
+              setCompactInspector({
+                isOpen: false,
+                nodeId: null,
+                position: { x: 0, y: 0 },
+              })
+            }
+            position={compactInspector.position}
+          />
+        )}
       </div>
-    </div>
-  </ReactFlow>
-
-  <CanvasMenus
-    contextMenu={contextMenu}
-    edgeMenu={edgeMenu}
-    onAddNode={handleAddNode}
-    edges={edges}
-    onEditEdgeLabel={(edgeId, nextLabel) => updateEdgeLabel(edgeId, nextLabel)}
-    onDeleteEdge={(edgeId) => deleteEdge(edgeId)}
-    onCloseEdgeMenu={() =>
-      setEdgeMenu({ isOpen: false, edgeId: null, position: { x: 0, y: 0 } })
-    }
-  />
-
-  {compactInspector.isOpen && inspectorNode && (
-    <NodeInspector
-      node={inspectorNode}
-      onClose={() =>
-        setCompactInspector({
-          isOpen: false,
-          nodeId: null,
-          position: { x: 0, y: 0 },
-        })
-      }
-      position={compactInspector.position}
-    />
-  )}
-</div>
-
 
       <ConnectionTypeModal
         isOpen={!!pendingConnection}

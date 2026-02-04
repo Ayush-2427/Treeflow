@@ -1,6 +1,7 @@
 "use client";
 
 import { Info, Download, Maximize2 } from "lucide-react";
+import CanvasPicker from "../../../../lib/tree/canvas/CanvasPicker";
 
 type TreeFlowHeaderProps = {
   isFullscreen?: boolean;
@@ -36,7 +37,12 @@ export default function TreeFlowHeader({
         <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-sky-300/40 to-transparent" />
 
         {/* content */}
-        <div className="relative grid grid-cols-[1fr_auto] items-center gap-4 px-5 py-4">
+        <div className="relative grid grid-cols-[auto_1fr_auto] items-center gap-4 px-5 py-4">
+          {/* left: canvas picker */}
+          <div className="flex items-center">
+            <CanvasPicker />
+          </div>
+
           {/* center title */}
           <div className="text-center">
             <h2 className="text-base font-semibold tracking-tight text-slate-900">
