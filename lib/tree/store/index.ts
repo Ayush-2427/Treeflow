@@ -1,14 +1,19 @@
+// lib/tree/store/index.ts
+"use client";
+
 import { create } from "zustand";
 import { applyNodeChanges, applyEdgeChanges } from "reactflow";
 import type { Edge, Node, NodeChange, EdgeChange, Viewport } from "reactflow";
+import { nanoid } from "nanoid";
+
 import type {
   ChatMessage,
   TreeMeta,
   TreeNodeData,
   ConnectionType,
   NodeType,
-} from "./types";
-import { nanoid } from "nanoid";
+} from "../types";
+
 import {
   localStorageAdapter,
   type TreeflowPersistedState,
@@ -16,11 +21,18 @@ import {
   validatePersistedState,
   downloadJSON,
   readJSONFile,
-} from "./persistance";
+} from "../persistance";
+
+import { getDayKey } from "./dayKey";
+import { buildParentMap, collectSubtreeIds } from "./graph";
+import { getConnectionColor } from "./edgeStyle";
+import { pickHandlesByDirection, withAutoHandles } from "./handles";
+import { layoutChildrenSimple } from "./layout";
+import { bfsOrder } from "./build";
 
 type ChatScope = { type: "workspace" } | { type: "node"; nodeId: string };
 
-type TreeState = {
+export type TreeState = {
   meta: TreeMeta;
 
   nodes: Node<TreeNodeData>[];
@@ -34,11 +46,19 @@ type TreeState = {
 
   dailyUses: { used: number; limit: number; dayKey: string };
 
-  // Connection modal state
+  // Progressive build (AI "building live")
+  isBuilding: boolean;
+  buildToken: number;
+  buildFromTree: (
+    finalNodes: Node<TreeNodeData>[],
+    finalEdges: Edge[],
+    opts?: { rootId?: string; nodeDelayMs?: number; edgeDelayMs?: number }
+  ) => Promise<void>;
+  cancelBuild: () => void;
+
   pendingConnection: { source: string; target: string } | null;
-  setPendingConnection: (
-    connection: { source: string; target: string } | null
-  ) => void;
+  setPendingConnection: (c: { source: string; target: string } | null) => void;
+
   createConnection: (
     source: string,
     target: string,
@@ -46,14 +66,12 @@ type TreeState = {
     label?: string
   ) => void;
 
-  // Edge label editing
   updateEdgeLabel: (edgeId: string, label: string) => void;
   deleteEdge: (edgeId: string) => void;
 
   setNodes: (nodes: Node<TreeNodeData>[]) => void;
   setEdges: (edges: Edge[]) => void;
 
-  // React Flow change handlers (dragging, selection, etc.)
   onNodesChange: (changes: NodeChange[]) => void;
   onEdgesChange: (changes: EdgeChange[]) => void;
 
@@ -81,7 +99,6 @@ type TreeState = {
 
   layoutChildren: (parentId: string) => void;
 
-  // Persistence methods
   setViewport: (viewport: Viewport) => void;
   getPersistableState: () => TreeflowPersistedState;
   hydrateFromPersisted: (state: TreeflowPersistedState) => void;
@@ -92,58 +109,28 @@ type TreeState = {
   importTree: (treeId: string, file: File) => Promise<void>;
 };
 
-function getDayKey() {
-  const d = new Date();
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
-  return `${yyyy}-${mm}-${dd}`;
+function nowMeta(meta: TreeMeta) {
+  return { ...meta, updatedAt: Date.now() };
 }
 
-function buildChildrenMap(edges: Edge[]) {
-  const map = new Map<string, string[]>();
-  for (const e of edges) {
-    if (!map.has(e.source)) map.set(e.source, []);
-    map.get(e.source)!.push(e.target);
-  }
-  return map;
+function sleep(ms: number) {
+  return new Promise((r) => setTimeout(r, ms));
 }
 
-function buildParentMap(edges: Edge[]) {
-  const map = new Map<string, string>();
-  for (const e of edges) map.set(e.target, e.source);
-  return map;
-}
-
-function collectSubtreeIds(rootId: string, edges: Edge[]) {
-  const childrenMap = buildChildrenMap(edges);
-  const stack = [rootId];
-  const visited = new Set<string>();
-  while (stack.length) {
-    const id = stack.pop()!;
-    if (visited.has(id)) continue;
-    visited.add(id);
-    const kids = childrenMap.get(id) ?? [];
-    for (const k of kids) stack.push(k);
-  }
-  return visited;
-}
-
-function getConnectionColor(type: ConnectionType): string {
-  switch (type) {
-    case "child":
-      return "#64748b";
-    case "branch":
-      return "#3b82f6";
-    case "dependency":
-      return "#f59e0b";
-    case "prerequisite":
-      return "#ef4444";
-    case "reference":
-      return "#8b5cf6";
-    default:
-      return "#64748b";
-  }
+function defaultRootNode(): Node<TreeNodeData> {
+  return {
+    id: "root",
+    type: "process",
+    position: { x: 0, y: 0 },
+    data: {
+      title: "Start here",
+      description: "Your main goal goes here",
+      notes: "",
+      completed: false,
+      color: "slate",
+      nodeType: "process",
+    },
+  };
 }
 
 export const useTreeStore = create<TreeState>((set, get) => ({
@@ -154,21 +141,7 @@ export const useTreeStore = create<TreeState>((set, get) => ({
     updatedAt: Date.now(),
   },
 
-  nodes: [
-    {
-      id: "root",
-      type: "process",
-      position: { x: 0, y: 0 },
-      data: {
-        title: "Start here",
-        description: "Your main goal goes here",
-        notes: "",
-        completed: false,
-        color: "slate",
-        nodeType: "process",
-      },
-    },
-  ],
+  nodes: [defaultRootNode()],
   edges: [],
   viewport: { x: 0, y: 0, zoom: 1 },
 
@@ -177,6 +150,10 @@ export const useTreeStore = create<TreeState>((set, get) => ({
   chatScope: { type: "workspace" },
 
   dailyUses: { used: 0, limit: 10, dayKey: getDayKey() },
+
+  // Progressive build
+  isBuilding: false,
+  buildToken: 0,
 
   pendingConnection: null,
 
@@ -194,39 +171,51 @@ export const useTreeStore = create<TreeState>((set, get) => ({
   setNodes: (nodes) =>
     set({
       nodes,
-      meta: { ...get().meta, updatedAt: Date.now() },
+      edges: withAutoHandles(nodes, get().edges),
+      meta: nowMeta(get().meta),
     }),
 
   setEdges: (edges) =>
     set({
-      edges,
-      meta: { ...get().meta, updatedAt: Date.now() },
+      edges: withAutoHandles(get().nodes, edges),
+      meta: nowMeta(get().meta),
     }),
 
   onNodesChange: (changes) =>
-    set({
-      nodes: applyNodeChanges(changes, get().nodes),
-      meta: { ...get().meta, updatedAt: Date.now() },
+    set(() => {
+      const nextNodes = applyNodeChanges(changes, get().nodes);
+      const nextEdges = withAutoHandles(nextNodes, get().edges);
+
+      return {
+        nodes: nextNodes,
+        edges: nextEdges,
+        meta: nowMeta(get().meta),
+      };
     }),
 
   onEdgesChange: (changes) =>
-    set({
-      edges: applyEdgeChanges(changes, get().edges),
-      meta: { ...get().meta, updatedAt: Date.now() },
+    set(() => {
+      const nextEdges = applyEdgeChanges(changes, get().edges);
+      return {
+        edges: withAutoHandles(get().nodes, nextEdges),
+        meta: nowMeta(get().meta),
+      };
     }),
 
-  updateEdgeLabel: (edgeId: string, label: string) =>
+  updateEdgeLabel: (edgeId, label) =>
     set({
       edges: get().edges.map((edge) =>
-        edge.id === edgeId ? { ...edge, label, data: { ...edge.data, label } } : edge
+        edge.id === edgeId
+          ? { ...edge, label, data: { ...edge.data, label } }
+          : edge
       ),
-      meta: { ...get().meta, updatedAt: Date.now() },
+      meta: nowMeta(get().meta),
     }),
 
-  deleteEdge: (edgeId: string) =>
+  deleteEdge: (edgeId) =>
     set({
       edges: get().edges.filter((edge) => edge.id !== edgeId),
-      meta: { ...get().meta, updatedAt: Date.now() },
+      meta: nowMeta(get().meta),
     }),
 
   selectNode: (id) => set({ selectedNodeId: id }),
@@ -242,35 +231,32 @@ export const useTreeStore = create<TreeState>((set, get) => ({
       nodes: get().nodes.map((n) =>
         n.id === id ? { ...n, data: { ...n.data, ...patch } } : n
       ),
-      meta: { ...get().meta, updatedAt: Date.now() },
+      meta: nowMeta(get().meta),
     }),
 
   addNode: (node) =>
     set({
       nodes: [...get().nodes, node],
-      meta: { ...get().meta, updatedAt: Date.now() },
+      edges: withAutoHandles([...get().nodes, node], get().edges),
+      meta: nowMeta(get().meta),
     }),
 
   addEdge: (edge) =>
     set({
-      edges: [...get().edges, edge],
-      meta: { ...get().meta, updatedAt: Date.now() },
+      edges: withAutoHandles(get().nodes, [...get().edges, edge]),
+      meta: nowMeta(get().meta),
     }),
 
-  addChildNode: (parentId: string) =>
+  addChildNode: (parentId) =>
     set(() => {
       const parent = get().nodes.find((n) => n.id === parentId);
       if (!parent) return {};
 
       const newId = nanoid();
-
       const newNode: Node<TreeNodeData> = {
         id: newId,
         type: "process",
-        position: {
-          x: parent.position.x + 240,
-          y: parent.position.y + 120,
-        },
+        position: { x: parent.position.x + 240, y: parent.position.y + 120 },
         data: {
           title: "New step",
           description: "",
@@ -278,24 +264,34 @@ export const useTreeStore = create<TreeState>((set, get) => ({
           completed: false,
           color: "slate",
           nodeType: "process",
-        } as TreeNodeData,
+        },
       };
+
+      const handles = pickHandlesByDirection(parent.position, newNode.position);
 
       const newEdge: Edge = {
-        id: `${parentId}-${newId}`,
+        id: `${parentId}-${newId}-${nanoid(4)}`,
         source: parentId,
         target: newId,
+        sourceHandle: handles.sourceHandle,
+        targetHandle: handles.targetHandle,
+        type: "smoothstep",
+        data: { type: "child", label: "" },
+        style: { stroke: getConnectionColor("child"), strokeWidth: 2 },
       };
 
+      const nextNodes = [...get().nodes, newNode];
+      const nextEdges = withAutoHandles(nextNodes, [...get().edges, newEdge]);
+
       return {
-        nodes: [...get().nodes, newNode],
-        edges: [...get().edges, newEdge],
+        nodes: nextNodes,
+        edges: nextEdges,
         selectedNodeId: newId,
-        meta: { ...get().meta, updatedAt: Date.now() },
+        meta: nowMeta(get().meta),
       };
     }),
 
-  addMultipleChildren: (parentId: string, count: number) =>
+  addMultipleChildren: (parentId, count) =>
     set(() => {
       const parent = get().nodes.find((n) => n.id === parentId);
       if (!parent || count < 1 || count > 10) return {};
@@ -308,14 +304,15 @@ export const useTreeStore = create<TreeState>((set, get) => ({
 
       for (let i = 0; i < count; i++) {
         const newId = nanoid();
+        const childPos = {
+          x: parent.position.x + 280,
+          y: startY + i * spacingY,
+        };
 
         newNodes.push({
           id: newId,
           type: "process",
-          position: {
-            x: parent.position.x + 280,
-            y: startY + i * spacingY,
-          },
+          position: childPos,
           data: {
             title: `Step ${i + 1}`,
             description: "",
@@ -323,25 +320,38 @@ export const useTreeStore = create<TreeState>((set, get) => ({
             completed: false,
             color: "slate",
             nodeType: "process",
-          } as TreeNodeData,
+          },
         });
 
+        const handles = pickHandlesByDirection(parent.position, childPos);
+
         newEdges.push({
-          id: `${parentId}-${newId}`,
+          id: `${parentId}-${newId}-${nanoid(4)}`,
           source: parentId,
           target: newId,
+          sourceHandle: handles.sourceHandle,
+          targetHandle: handles.targetHandle,
+          type: "smoothstep",
+          data: { type: "child", label: "" },
+          style: { stroke: getConnectionColor("child"), strokeWidth: 2 },
         });
       }
 
+      const nextNodes = [...get().nodes, ...newNodes];
+      const nextEdges = withAutoHandles(
+        nextNodes,
+        [...get().edges, ...newEdges]
+      );
+
       return {
-        nodes: [...get().nodes, ...newNodes],
-        edges: [...get().edges, ...newEdges],
-        selectedNodeId: newNodes[0].id,
-        meta: { ...get().meta, updatedAt: Date.now() },
+        nodes: nextNodes,
+        edges: nextEdges,
+        selectedNodeId: newNodes[0]?.id ?? get().selectedNodeId,
+        meta: nowMeta(get().meta),
       };
     }),
 
-  addNodeAtPosition: (x: number, y: number, nodeType: NodeType = "process") =>
+  addNodeAtPosition: (x, y, nodeType = "process") =>
     set(() => {
       const newId = nanoid();
 
@@ -365,26 +375,26 @@ export const useTreeStore = create<TreeState>((set, get) => ({
           completed: false,
           color: "slate",
           nodeType,
-        } as TreeNodeData,
+        },
       };
 
       return {
         nodes: [...get().nodes, newNode],
         selectedNodeId: newId,
-        meta: { ...get().meta, updatedAt: Date.now() },
+        meta: nowMeta(get().meta),
       };
     }),
 
-  addSiblingNode: (nodeId: string) =>
+  addSiblingNode: (nodeId) =>
     set(() => {
       const { nodes, edges } = get();
       const parentMap = buildParentMap(edges);
       const parentId = parentMap.get(nodeId);
 
-      if (!parentId) {
-        const base = nodes.find((n) => n.id === nodeId);
-        if (!base) return {};
+      const base = nodes.find((n) => n.id === nodeId);
+      if (!base) return {};
 
+      if (!parentId) {
         const newId = nanoid();
         const newNode: Node<TreeNodeData> = {
           id: newId,
@@ -397,25 +407,26 @@ export const useTreeStore = create<TreeState>((set, get) => ({
             completed: false,
             color: "slate",
             nodeType: "process",
-          } as TreeNodeData,
+          },
         };
 
         return {
           nodes: [...nodes, newNode],
           selectedNodeId: newId,
-          meta: { ...get().meta, updatedAt: Date.now() },
+          meta: nowMeta(get().meta),
         };
       }
 
-      const base = nodes.find((n) => n.id === nodeId);
       const parent = nodes.find((n) => n.id === parentId);
-      if (!base || !parent) return {};
+      if (!parent) return {};
 
       const newId = nanoid();
+      const newPos = { x: base.position.x, y: base.position.y + 120 };
+
       const newNode: Node<TreeNodeData> = {
         id: newId,
         type: "process",
-        position: { x: base.position.x, y: base.position.y + 120 },
+        position: newPos,
         data: {
           title: "New step",
           description: "",
@@ -423,24 +434,34 @@ export const useTreeStore = create<TreeState>((set, get) => ({
           completed: false,
           color: "slate",
           nodeType: "process",
-        } as TreeNodeData,
+        },
       };
+
+      const handles = pickHandlesByDirection(parent.position, newPos);
 
       const newEdge: Edge = {
-        id: `${parentId}-${newId}`,
+        id: `${parentId}-${newId}-${nanoid(4)}`,
         source: parentId,
         target: newId,
+        sourceHandle: handles.sourceHandle,
+        targetHandle: handles.targetHandle,
+        type: "smoothstep",
+        data: { type: "child", label: "" },
+        style: { stroke: getConnectionColor("child"), strokeWidth: 2 },
       };
 
+      const nextNodes = [...nodes, newNode];
+      const nextEdges = withAutoHandles(nextNodes, [...edges, newEdge]);
+
       return {
-        nodes: [...nodes, newNode],
-        edges: [...edges, newEdge],
+        nodes: nextNodes,
+        edges: nextEdges,
         selectedNodeId: newId,
-        meta: { ...get().meta, updatedAt: Date.now() },
+        meta: nowMeta(get().meta),
       };
     }),
 
-  deleteNode: (nodeId: string) =>
+  deleteNode: (nodeId) =>
     set(() => {
       const { nodes, edges, selectedNodeId } = get();
       if (nodeId === "root") return {};
@@ -457,13 +478,13 @@ export const useTreeStore = create<TreeState>((set, get) => ({
 
       return {
         nodes: remainingNodes,
-        edges: remainingEdges,
+        edges: withAutoHandles(remainingNodes, remainingEdges),
         selectedNodeId: nextSelected,
-        meta: { ...get().meta, updatedAt: Date.now() },
+        meta: nowMeta(get().meta),
       };
     }),
 
-  duplicateSubtree: (nodeId: string) =>
+  duplicateSubtree: (nodeId) =>
     set(() => {
       const { nodes, edges } = get();
       const node = nodes.find((n) => n.id === nodeId);
@@ -483,6 +504,7 @@ export const useTreeStore = create<TreeState>((set, get) => ({
       for (const oldId of subtreeIds) {
         const oldNode = nodes.find((n) => n.id === oldId);
         if (!oldNode) continue;
+
         const newId = oldToNew.get(oldId)!;
 
         newNodes.push({
@@ -494,7 +516,10 @@ export const useTreeStore = create<TreeState>((set, get) => ({
           },
           data: {
             ...oldNode.data,
-            title: oldId === nodeId ? `${oldNode.data.title} (copy)` : oldNode.data.title,
+            title:
+              oldId === nodeId
+                ? `${oldNode.data.title} (copy)`
+                : oldNode.data.title,
           },
         });
       }
@@ -502,31 +527,60 @@ export const useTreeStore = create<TreeState>((set, get) => ({
       const newEdges: Edge[] = [];
       for (const e of edges) {
         if (subtreeIds.has(e.source) && subtreeIds.has(e.target)) {
+          const ns = oldToNew.get(e.source)!;
+          const nt = oldToNew.get(e.target)!;
+
+          const sNode = newNodes.find((n) => n.id === ns);
+          const tNode = newNodes.find((n) => n.id === nt);
+
+          const handles =
+            sNode && tNode
+              ? pickHandlesByDirection(sNode.position, tNode.position)
+              : undefined;
+
           newEdges.push({
             ...e,
-            id: `${oldToNew.get(e.source)}-${oldToNew.get(e.target)}`,
-            source: oldToNew.get(e.source)!,
-            target: oldToNew.get(e.target)!,
+            id: `${ns}-${nt}-${nanoid(4)}`,
+            source: ns,
+            target: nt,
+            sourceHandle: handles?.sourceHandle ?? e.sourceHandle,
+            targetHandle: handles?.targetHandle ?? e.targetHandle,
           });
         }
       }
 
       if (parentId) {
         const newRootId = oldToNew.get(nodeId)!;
+        const parentNode = nodes.find((n) => n.id === parentId);
+        const newRootNode = newNodes.find((n) => n.id === newRootId);
+
+        const handles =
+          parentNode && newRootNode
+            ? pickHandlesByDirection(parentNode.position, newRootNode.position)
+            : undefined;
+
         newEdges.push({
-          id: `${parentId}-${newRootId}`,
+          id: `${parentId}-${newRootId}-${nanoid(4)}`,
           source: parentId,
           target: newRootId,
+          sourceHandle: handles?.sourceHandle,
+          targetHandle: handles?.targetHandle,
+          type: "smoothstep",
+          data: { type: "child", label: "" },
+          style: { stroke: getConnectionColor("child"), strokeWidth: 2 },
         });
       }
 
       const duplicatedRootId = oldToNew.get(nodeId)!;
 
+      const nextNodes = [...nodes, ...newNodes];
+      const nextEdges = withAutoHandles(nextNodes, [...edges, ...newEdges]);
+
       return {
-        nodes: [...nodes, ...newNodes],
-        edges: [...edges, ...newEdges],
+        nodes: nextNodes,
+        edges: nextEdges,
         selectedNodeId: duplicatedRootId,
-        meta: { ...get().meta, updatedAt: Date.now() },
+        meta: nowMeta(get().meta),
       };
     }),
 
@@ -535,7 +589,7 @@ export const useTreeStore = create<TreeState>((set, get) => ({
   addChat: (msg) =>
     set({
       chat: [...get().chat, msg],
-      meta: { ...get().meta, updatedAt: Date.now() },
+      meta: nowMeta(get().meta),
     }),
 
   incrementDailyUse: () =>
@@ -556,17 +610,107 @@ export const useTreeStore = create<TreeState>((set, get) => ({
 
   setPendingConnection: (connection) => set({ pendingConnection: connection }),
 
-  createConnection: (source: string, target: string, type: ConnectionType, label?: string) =>
-    set(() => {
-      const { edges } = get();
+  cancelBuild: () =>
+    set({
+      buildToken: get().buildToken + 1,
+      isBuilding: false,
+    }),
 
+  buildFromTree: async (finalNodes, finalEdges, opts = {}) => {
+    const rootId = opts.rootId ?? "root";
+    const nodeDelayMs = opts.nodeDelayMs ?? 140;
+    const edgeDelayMs = opts.edgeDelayMs ?? 80;
+
+    const token = get().buildToken + 1;
+    set({ buildToken: token, isBuilding: true });
+
+    const root = finalNodes.find((n) => n.id === rootId) ?? finalNodes[0];
+    if (!root) {
+      set({ isBuilding: false });
+      return;
+    }
+
+    set({
+      nodes: [root],
+      edges: [],
+      selectedNodeId: root.id,
+      meta: nowMeta(get().meta),
+    });
+
+    const order = bfsOrder(root.id, finalNodes, finalEdges);
+    const nodeById = new Map(finalNodes.map((n) => [n.id, n]));
+    const edgeByTarget = new Map<string, Edge>();
+    for (const e of finalEdges) edgeByTarget.set(e.target, e);
+
+    for (let i = 1; i < order.length; i++) {
+      if (get().buildToken !== token) {
+        set({ isBuilding: false });
+        return;
+      }
+
+      const id = order[i];
+      const rawNode = nodeById.get(id);
+      if (!rawNode) continue;
+
+      const nextNode: Node<TreeNodeData> = {
+        ...rawNode,
+        data: { ...rawNode.data, appear: true } as any,
+      };
+
+      set((state) => ({
+        nodes: [...state.nodes, nextNode],
+        meta: nowMeta(state.meta),
+      }));
+
+      await sleep(nodeDelayMs);
+
+      if (get().buildToken !== token) {
+        set({ isBuilding: false });
+        return;
+      }
+
+      const incoming = edgeByTarget.get(id);
+      if (incoming) {
+        set((state) => {
+          const nextEdges = withAutoHandles(state.nodes, [...state.edges, incoming]);
+          return { edges: nextEdges, meta: nowMeta(state.meta) };
+        });
+
+        await sleep(edgeDelayMs);
+
+        set((state) => ({
+          nodes: layoutChildrenSimple(incoming.source, state.nodes, state.edges),
+        }));
+      }
+    }
+
+    set((state) => ({
+      edges: withAutoHandles(state.nodes, finalEdges),
+      isBuilding: false,
+      meta: nowMeta(state.meta),
+    }));
+  },
+
+  createConnection: (source, target, type, label) =>
+    set(() => {
+      const { edges, nodes } = get();
       const exists = edges.some((e) => e.source === source && e.target === target);
       if (exists) return { pendingConnection: null };
+
+      const sourceNode = nodes.find((n) => n.id === source);
+      const targetNode = nodes.find((n) => n.id === target);
+
+      const handles =
+        sourceNode && targetNode
+          ? pickHandlesByDirection(sourceNode.position, targetNode.position)
+          : undefined;
 
       const newEdge: Edge = {
         id: `${source}-${target}-${nanoid(4)}`,
         source,
         target,
+        sourceHandle: handles?.sourceHandle,
+        targetHandle: handles?.targetHandle,
         type: "smoothstep",
         data: { type, label: label || "" },
         label: label || (type !== "child" ? type : undefined),
@@ -588,43 +732,22 @@ export const useTreeStore = create<TreeState>((set, get) => ({
         labelBgBorderRadius: 4,
       };
 
+      const nextEdges = withAutoHandles(nodes, [...edges, newEdge]);
+
       return {
-        edges: [...edges, newEdge],
+        edges: nextEdges,
         pendingConnection: null,
-        meta: { ...get().meta, updatedAt: Date.now() },
+        meta: nowMeta(get().meta),
       };
     }),
 
-  layoutChildren: (parentId: string) =>
+  layoutChildren: (parentId) =>
     set(() => {
-      const { nodes, edges } = get();
-      const parent = nodes.find((n) => n.id === parentId);
-      if (!parent) return {};
-
-      const childIds = edges.filter((e) => e.source === parentId).map((e) => e.target);
-      if (!childIds.length) return {};
-
-      const spacingY = 120;
-      const startY = parent.position.y - ((childIds.length - 1) * spacingY) / 2;
-
-      const updated = nodes.map((n) => {
-        const idx = childIds.indexOf(n.id);
-        if (idx === -1) return n;
-        return {
-          ...n,
-          position: { x: parent.position.x + 280, y: startY + idx * spacingY },
-        };
-      });
-
-      return {
-        nodes: updated,
-        meta: { ...get().meta, updatedAt: Date.now() },
-      };
+      const nextNodes = layoutChildrenSimple(parentId, get().nodes, get().edges);
+      return { nodes: nextNodes, meta: nowMeta(get().meta) };
     }),
 
-  // ============================================================================
-  // PERSISTENCE METHODS
-  // ============================================================================
+  // Persistence
 
   setViewport: (viewport) => set({ viewport }),
 
@@ -637,16 +760,14 @@ export const useTreeStore = create<TreeState>((set, get) => ({
       nodes: state.nodes,
       edges: state.edges,
       viewport: state.viewport,
-      ui: {
-        selectedNodeId: state.selectedNodeId,
-      },
+      ui: { selectedNodeId: state.selectedNodeId },
     };
   },
 
   hydrateFromPersisted: (persisted) => {
     set({
       nodes: persisted.nodes,
-      edges: persisted.edges,
+      edges: withAutoHandles(persisted.nodes, persisted.edges),
       viewport: persisted.viewport,
       selectedNodeId: persisted.ui?.selectedNodeId || null,
       meta: {
@@ -657,25 +778,23 @@ export const useTreeStore = create<TreeState>((set, get) => ({
     });
   },
 
-  loadTree: async (treeId: string) => {
+  loadTree: async (treeId) => {
     try {
       const persisted = await localStorageAdapter.load(treeId);
-
       if (persisted) {
         get().hydrateFromPersisted(persisted);
         console.log(`✓ Loaded tree "${treeId}" from localStorage`);
         return true;
-      } else {
-        console.log(`No saved state for tree "${treeId}", using defaults`);
-        return false;
       }
+      console.log(`No saved state for tree "${treeId}", using defaults`);
+      return false;
     } catch (error) {
       console.error("Failed to load tree:", error);
       return false;
     }
   },
 
-  saveTree: async (treeId: string) => {
+  saveTree: async (treeId) => {
     try {
       const state = get().getPersistableState();
       await localStorageAdapter.save(treeId, state);
@@ -685,34 +804,17 @@ export const useTreeStore = create<TreeState>((set, get) => ({
     }
   },
 
-  resetTree: async (treeId: string) => {
+  resetTree: async (treeId) => {
     try {
       await localStorageAdapter.clear(treeId);
 
       set({
-        nodes: [
-          {
-            id: "root",
-            type: "process",
-            position: { x: 0, y: 0 },
-            data: {
-              title: "Start here",
-              description: "Your main goal goes here",
-              notes: "",
-              completed: false,
-              color: "slate",
-              nodeType: "process",
-            },
-          },
-        ],
+        nodes: [defaultRootNode()],
         edges: [],
         viewport: { x: 0, y: 0, zoom: 1 },
         selectedNodeId: "root",
-        meta: {
-          ...get().meta,
-          treeId,
-          updatedAt: Date.now(),
-        },
+        meta: { ...get().meta, treeId, updatedAt: Date.now() },
+        isBuilding: false,
       });
 
       console.log(`✓ Reset tree "${treeId}" to defaults`);
@@ -722,17 +824,16 @@ export const useTreeStore = create<TreeState>((set, get) => ({
     }
   },
 
-  exportTree: (treeId: string) => {
+  exportTree: (treeId) => {
     const state = get().getPersistableState();
     const filename = `treeflow-${treeId}-${Date.now()}.json`;
     downloadJSON(filename, state);
     console.log(`✓ Exported tree "${treeId}" as ${filename}`);
   },
 
-  importTree: async (treeId: string, file: File) => {
+  importTree: async (treeId, file) => {
     try {
       const data = await readJSONFile(file);
-
       if (!validatePersistedState(data)) {
         throw new Error("Invalid TreeFlow data format");
       }
