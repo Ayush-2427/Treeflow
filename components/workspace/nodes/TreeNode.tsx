@@ -110,10 +110,18 @@ function TreeNode({ id, data, selected }: NodeProps<TreeNodeData>) {
         style={{ background: hexToRgba(accent, 0.22) }}
       />
 
-      <Handle type="target" position={Position.Left} className={`${baseHandle} ${handleState} group-hover:${visibleHandle}`} />
-      <Handle type="source" position={Position.Right} className={`${baseHandle} ${handleState} group-hover:${visibleHandle}`} />
-      <Handle type="source" position={Position.Bottom} className={`${baseHandle} ${handleState} group-hover:${visibleHandle}`} />
-      <Handle type="target" position={Position.Top} className={`${baseHandle} ${handleState} group-hover:${visibleHandle}`} />
+      {/* TARGET handles (incoming) */}
+<Handle type="target" position={Position.Top} id="t" className={`${baseHandle} ${handleState} group-hover:${visibleHandle}`} />
+<Handle type="target" position={Position.Right} id="r" className={`${baseHandle} ${handleState} group-hover:${visibleHandle}`} />
+<Handle type="target" position={Position.Bottom} id="b" className={`${baseHandle} ${handleState} group-hover:${visibleHandle}`} />
+<Handle type="target" position={Position.Left} id="l" className={`${baseHandle} ${handleState} group-hover:${visibleHandle}`} />
+
+{/* SOURCE handles (outgoing) */}
+<Handle type="source" position={Position.Top} id="t-s" className={`${baseHandle} ${handleState} group-hover:${visibleHandle}`} />
+<Handle type="source" position={Position.Right} id="r-s" className={`${baseHandle} ${handleState} group-hover:${visibleHandle}`} />
+<Handle type="source" position={Position.Bottom} id="b-s" className={`${baseHandle} ${handleState} group-hover:${visibleHandle}`} />
+<Handle type="source" position={Position.Left} id="l-s" className={`${baseHandle} ${handleState} group-hover:${visibleHandle}`} />
+
 
       <div className="relative px-4 py-3">
         <div className="flex items-start gap-3">
